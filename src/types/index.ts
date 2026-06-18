@@ -184,7 +184,7 @@ export interface FilterOptions {
   warehouse?: string;
   searchQuery?: string;
   etaWeek?: string; // Format: "YYYY-Wnn" e.g. "2025-W45"
-  etaRange?: "5weeks" | "3months" | "6months" | "all"; // Default window for order list (default: "all")
+  etaRange?: "5weeks" | "3months" | "6months" | "all"; // Default window for order list (default: "5weeks")
   workflowStatus?: "ready" | "in-progress" | "not-started"; // Workflow filter
   transporterBooked?: boolean; // Filter by transporter booked status
   orderPicked?: boolean; // Filter by order picked status

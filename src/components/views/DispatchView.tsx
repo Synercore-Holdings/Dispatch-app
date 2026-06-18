@@ -197,7 +197,7 @@ export const DispatchView: React.FC<DispatchViewProps> = ({ onOpenAlerts, initia
     }
 
     // "all" skips the window too
-    const range = filters.etaRange || "all";
+    const range = filters.etaRange || "5weeks";
     if (range === "all") {
       return Array.from(refMap.values());
     }

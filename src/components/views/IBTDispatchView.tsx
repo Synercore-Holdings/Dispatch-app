@@ -78,7 +78,7 @@ export const IBTDispatchView: React.FC<IBTDispatchViewProps> = ({ onOpenAlerts }
       return Array.from(refMap.values());
     }
 
-    const range = filters.etaRange || "all";
+    const range = filters.etaRange || "5weeks";
     if (range === "all") {
       return Array.from(refMap.values());
     }

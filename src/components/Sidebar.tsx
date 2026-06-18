@@ -90,6 +90,22 @@ const REQUIRED_AFRICA_DOCUMENT_IDS = [
   "batch-traceability",
 ];
 
+const isInDefaultEtaWindow = (eta?: string) => {
+  if (!eta) return true;
+
+  const now = new Date();
+  const startOfWeek = new Date(now);
+  startOfWeek.setDate(now.getDate() - now.getDay());
+  startOfWeek.setHours(0, 0, 0, 0);
+
+  const endOfRange = new Date(startOfWeek);
+  endOfRange.setDate(endOfRange.getDate() + 5 * 7);
+  endOfRange.setHours(23, 59, 59, 999);
+
+  const etaDate = new Date(eta);
+  return !Number.isNaN(etaDate.getTime()) && etaDate >= startOfWeek && etaDate <= endOfRange;
+};
+
 export const Sidebar: React.FC<SidebarProps> = ({ activeItem, onItemChange, collapsed, onToggleCollapse, onOpenHelp }) => {
   const { user, logout } = useAuth();
   const { jobs } = useDispatch();
@@ -145,11 +161,16 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeItem, onItemChange, coll
   const sidebarStats = useMemo(() => {
     const orderJobs = jobs.filter((j) => j.jobType === "order" || j.jobType === undefined);
     const ibtJobs = jobs.filter((j) => j.jobType === "ibt");
+    const pendingOrderRefs = new Set(
+      orderJobs
+        .filter((j) => j.status === "pending" && isInDefaultEtaWindow(j.eta))
+        .map((j) => j.ref || j.id),
+    );
     return {
       totalJobs: orderJobs.length,
       inTransit: orderJobs.filter((j) => j.status === "en-route").length,
       exceptions: countExceptionQueueItems(orderJobs),
-      pendingCount: orderJobs.filter((j) => j.status === "pending").length,
+      pendingCount: pendingOrderRefs.size,
       ibtPendingCount: ibtJobs.filter((j) => j.status === "pending").length,
       africaExportRiskCount: africaExports.filter((shipment) => {
         if (shipment.archived || shipment.status === "delivered" || shipment.status === "cancelled") return false;

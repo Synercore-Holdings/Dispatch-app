@@ -77,7 +77,7 @@ export const FilterBar: React.FC<{ showMore?: boolean }> = ({ showMore }) => {
         {drivers.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
       </select>
 
-      <select value={filters.etaRange || "all"} onChange={(e) => setFilters({ ...filters, etaRange: e.target.value as "5weeks" | "3months" | "6months" | "all" })} className={selCls} title="ETA range window for the order list. Search ignores this filter.">
+      <select value={filters.etaRange || "5weeks"} onChange={(e) => setFilters({ ...filters, etaRange: e.target.value as "5weeks" | "3months" | "6months" | "all" })} className={selCls} title="ETA range window for the order list. Search ignores this filter.">
         <option value="all">All Dates</option>
         <option value="5weeks">Next 5 Weeks</option>
         <option value="3months">Next 3 Months</option>

@@ -4,6 +4,10 @@ import type { Job, Driver, FilterOptions, SortOptions } from "../types";
 import { saveJobs, loadJobs, saveDrivers, loadDrivers } from "../utils/storage";
 import { jobsAPI, driversAPI } from "../services/api";
 
+const DEFAULT_FILTERS: FilterOptions = {
+  etaRange: "5weeks",
+};
+
 // ---------- State & Actions ----------
 type State = {
   jobs: Job[];
@@ -123,13 +127,13 @@ export function DispatchProvider({
   });
 
   // Filters and sorting state
-  const [filters, setFilters] = useState<FilterOptions>({});
+  const [filters, setFilters] = useState<FilterOptions>(DEFAULT_FILTERS);
   const [sortOptions, setSortOptions] = useState<SortOptions>({
     field: "createdAt",
     direction: "desc",
   });
 
-  const resetFilters = () => setFilters({});
+  const resetFilters = () => setFilters(DEFAULT_FILTERS);
   const clearError = () => dispatch({ type: "SET_ERROR", error: null });
 
   // Refresh data from API (silent=true skips loading indicator for background polls)
