@@ -286,6 +286,7 @@ const EXPORT_LEAD_TIME_SERVICES: {
 
 const EXPORT_STATUSES: ExportStatus[] = ["pending", "assigned", "in-transit", "delivered", "cancelled"];
 const CLOSED_EXPORT_STATUSES: ExportStatus[] = ["delivered", "cancelled"];
+const PRE_DISPATCH_EXPORT_STATUSES: ExportStatus[] = ["pending", "assigned"];
 
 const asText = (value: unknown, fallback = "") => (value === undefined || value === null ? fallback : String(value));
 
@@ -1426,8 +1427,9 @@ export const AfricaExportsView: React.FC<AfricaExportsViewProps> = ({ initialRef
   const getReadiness = (item: ExportShipment) => {
     if (item.archived) return { label: "Archived", detail: "Hidden from live export work", tone: "border-gray-200 bg-gray-100 text-gray-700" };
     if (item.status === "cancelled") return { label: "Cancelled", detail: "Removed from live export queue", tone: "border-gray-200 bg-gray-100 text-gray-700" };
-    if (item.dispatchApprovedAt) return { label: "Approved", detail: `Dispatch approved ${item.dispatchApprovedAt}`, tone: "border-emerald-300 bg-emerald-100 text-emerald-800" };
     if (item.status === "delivered") return { label: "Delivered", detail: "Shipment has been completed", tone: "border-emerald-200 bg-emerald-50 text-emerald-700" };
+    if (item.status === "in-transit") return { label: "In Transit", detail: "Shipment has departed and is in transit", tone: "border-blue-200 bg-blue-50 text-blue-700" };
+    if (item.dispatchApprovedAt) return { label: "Approved", detail: `Dispatch approved ${item.dispatchApprovedAt}`, tone: "border-emerald-300 bg-emerald-100 text-emerald-800" };
     if (!item.ref || !item.customer) return { label: "Draft", detail: "Reference and client are still needed", tone: "border-gray-200 bg-gray-50 text-gray-600" };
 
     const missingRequired = getMissingRequiredDocs(item);
@@ -1461,7 +1463,7 @@ export const AfricaExportsView: React.FC<AfricaExportsViewProps> = ({ initialRef
   }, [activeShipments, getMissingRequiredDocs]);
   const readyShipments = useMemo(() => {
     return activeShipments.filter((item) =>
-      !CLOSED_EXPORT_STATUSES.includes(item.status) &&
+      PRE_DISPATCH_EXPORT_STATUSES.includes(item.status) &&
       getMissingRequiredDocs(item).length === 0 &&
       Boolean(item.lastCheckedAt) &&
       Boolean(item.assignedTransporterId),
@@ -1638,7 +1640,7 @@ export const AfricaExportsView: React.FC<AfricaExportsViewProps> = ({ initialRef
   const canApproveDispatch = Boolean(
     shipment.ref &&
     !shipment.archived &&
-    !CLOSED_EXPORT_STATUSES.includes(shipment.status) &&
+    PRE_DISPATCH_EXPORT_STATUSES.includes(shipment.status) &&
     missingRequiredDocs.length === 0 &&
     shipment.lastCheckedAt &&
     shipment.assignedTransporterId,
