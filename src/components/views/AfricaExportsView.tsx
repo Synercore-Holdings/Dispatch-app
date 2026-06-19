@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   DndContext,
   DragEndEvent,
@@ -64,6 +64,13 @@ interface CountryRule {
   requiredDocumentIds: string[];
   history?: CountryRuleHistoryEntry[];
   updatedBy?: string;
+}
+
+interface CustomerRule {
+  title: string;
+  matches: (customer: string) => boolean;
+  points: string[];
+  requiredDocumentIds: string[];
 }
 
 interface CountryRuleHistoryEntry {
@@ -341,6 +348,7 @@ const CORE_DOCUMENTS: ChecklistItem[] = [
   { id: "sad-500", label: "SAD 500 / Export Customs Declaration", purpose: "South African customs export declaration lodged with SARS.", required: true },
   { id: "transport-document", label: "Transport Document / Consignment Note", purpose: "Road consignment note, CMR, air waybill, or bill of lading depending on transport mode.", required: true },
   { id: "road-manifest", label: "Road Manifest / Cargo Manifest", purpose: "Transporter or clearing-agent manifest used with cross-border road clearance and destination import support.", conditional: "Required for South Africa to Zambia road exports and other road movements where the border agent requests a cargo or road manifest." },
+  { id: "electronic-manifest", label: "Electronic Manifest", purpose: "Electronic cargo manifest aligned to the commercial invoice, packing list, shipment quantities, and transport details.", conditional: "Required before loading for Dairibord Zimbabwe shipments." },
   { id: "hs-code", label: "HS Code / Tariff Classification", purpose: "Required for SA export declaration and destination import clearance.", required: true },
   { id: "exporter-code", label: "Exporter Customs Code / SARS Registration", purpose: "Confirms the exporter is registered with SARS Customs where required.", required: true },
   { id: "proof-export", label: "Proof of Export Pack", purpose: "VAT zero-rating and customs audit support: SAD 500, transport document, border stamps, POD, exit note, and related evidence.", required: true },
@@ -370,6 +378,11 @@ const FOOD_DOCUMENTS: ChecklistItem[] = [
 ];
 
 const PERMIT_DOCUMENTS: ChecklistItem[] = [
+  { id: "speedlink-loading-authority", label: "Speedlink Cargo Loading Authority", purpose: "Proof that the Zimbabwe clearing agent has pre-checked duties, third-party charges, controls, compliance documents, and preferential trade requirements.", conditional: "Mandatory before any Dairibord Zimbabwe cargo is loaded or dispatched." },
+  { id: "loading-authority-prealert", label: "Loading Authority Attached to Pre-alert", purpose: "Confirms the Speedlink Cargo Loading Authority was included in the pre-alert sent to the transporter, clearing agent, and relevant internal parties.", conditional: "Mandatory for Dairibord Zimbabwe shipments before loading." },
+  { id: "applicable-control-compliance", label: "Applicable Control / Compliance Documents", purpose: "Product-specific control and compliance documents checked against the Loading Authority and shipment pack.", conditional: "Required where identified by Speedlink Cargo, ZIMRA, or another Zimbabwe authority." },
+  { id: "ema-si-268-2018", label: "EMA SI 268 of 2018", purpose: "Zimbabwe environmental control/compliance document currently reflected on the Loading Authority for Yogurt Stabiliser under tariff code 3824.9990.", conditional: "Required for Yogurt Stabiliser supplied to Dairibord Zimbabwe unless Speedlink Cargo confirms otherwise in writing." },
+  { id: "additional-zimbabwe-compliance", label: "Additional Zimbabwe Compliance Documents", purpose: "Any further compliance documents requested by Speedlink Cargo, ZIMRA, or the relevant Zimbabwe authority.", conditional: "Add and confirm when requested for the shipment." },
   { id: "itac-permit", label: "ITAC Export Permit", purpose: "Required only for controlled or restricted goods leaving South Africa.", conditional: "Check before dispatch for controlled goods." },
   { id: "import-permit", label: "Destination Import Permit", purpose: "Often needed for food, chemicals, dairy, animal-origin, plant, medicine, or controlled products.", conditional: "Must usually be issued before shipment." },
   { id: "coc-pvoc", label: "COC / PVOC / Pre-shipment Inspection", purpose: "Conformity assessment for countries such as Kenya, Tanzania, Uganda, Cameroon, and others depending on product.", conditional: "Confirm with destination agent before loading." },
@@ -467,6 +480,37 @@ const UNIVERSAL_EXPORT_RULES = [
 
 const AGENT_QUESTION =
   "Please confirm, based on the HS code and product description, whether any import permit, standards approval, COC/PVOC, health certificate, phytosanitary/veterinary certificate, or original certificate of origin is required before shipment.";
+
+const normalizeCustomerName = (customer: string) => customer.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+
+const DAIRIBORD_ZIMBABWE_RULE: CustomerRule = {
+  title: "Dairibord Zimbabwe - Speedlink Loading Authority",
+  matches: (customer) => normalizeCustomerName(customer).includes("dairibord zimbabwe"),
+  points: [
+    "No Dairibord Zimbabwe shipment may be loaded or dispatched until Logistics has obtained the Speedlink Cargo Loading Authority and checked it against the shipment documents.",
+    "Obtain the Loading Authority within 3-4 working days from receipt of the order, provided all required documents and product information are available.",
+    "Before loading, align the Commercial / Supplier Invoice, Packing List, Electronic Manifest, correct preferential trade agreement certificate, applicable control documents, and any additional documents requested by Speedlink Cargo, ZIMRA, or the relevant Zimbabwe authority.",
+    "Attach the Loading Authority to the pre-alert sent to the transporter, clearing agent, and relevant internal parties.",
+    "If the authority is delayed, Logistics must update Sales, QA, and Dispatch with the outstanding information, who it is pending from, and the next expected follow-up date.",
+    "Logistics owns the authority; QA owns supporting product, ingredient, label, COA, batch, and compliance information; Sales owns customer-specific requirements. Final approval remains cross-functional where documentation or compliance is affected.",
+  ],
+  requiredDocumentIds: [
+    "commercial-invoice",
+    "packing-list",
+    "electronic-manifest",
+    "sadc-coo",
+    "speedlink-loading-authority",
+    "loading-authority-prealert",
+    "applicable-control-compliance",
+  ],
+};
+
+const getCustomerRule = (customer: string) =>
+  DAIRIBORD_ZIMBABWE_RULE.matches(customer) ? DAIRIBORD_ZIMBABWE_RULE : undefined;
+
+const isYogurtStabiliserShipment = (shipment: ExportShipment) =>
+  [shipment.productType, ...(shipment.productLines || []).map((line) => line.product)]
+    .some((product) => /yog(h)?urt\s+stabili[sz]er/i.test(product));
 
 const DEFAULT_COUNTRY_RULES: Record<string, CountryRule> = {
   Botswana: {
@@ -1365,13 +1409,19 @@ export const AfricaExportsView: React.FC<AfricaExportsViewProps> = ({ initialRef
   );
   const baseRequiredIds = useMemo(() => new Set(allChecklistItems.filter((item) => item.required).map((item) => item.id)), [allChecklistItems]);
 
-  const getRequiredItemsForShipment = (item: ExportShipment) => {
+  const getRequiredItemsForShipment = useCallback((item: ExportShipment) => {
     const countryRequiredIds = countryRules[item.destinationCountry]?.requiredDocumentIds;
-    const ids = countryRequiredIds ? new Set(countryRequiredIds) : baseRequiredIds;
+    const ids = new Set(countryRequiredIds || baseRequiredIds);
+    const customerRule = getCustomerRule(item.customer);
+    customerRule?.requiredDocumentIds.forEach((id) => ids.add(id));
+    if (customerRule && isYogurtStabiliserShipment(item)) ids.add("ema-si-268-2018");
     return allChecklistItems.filter((doc) => ids.has(doc.id));
-  };
+  }, [allChecklistItems, baseRequiredIds, countryRules]);
 
-  const getMissingRequiredDocs = (item: ExportShipment) => getRequiredItemsForShipment(item).filter((doc) => !item.documents?.[doc.id]);
+  const getMissingRequiredDocs = useCallback(
+    (item: ExportShipment) => getRequiredItemsForShipment(item).filter((doc) => !item.documents?.[doc.id]),
+    [getRequiredItemsForShipment],
+  );
 
   const getReadiness = (item: ExportShipment) => {
     if (item.archived) return { label: "Archived", detail: "Hidden from live export work", tone: "border-gray-200 bg-gray-100 text-gray-700" };
@@ -1405,10 +1455,10 @@ export const AfricaExportsView: React.FC<AfricaExportsViewProps> = ({ initialRef
       if (CLOSED_EXPORT_STATUSES.includes(item.status)) return false;
       return getMissingRequiredDocs(item).length > 0;
     });
-  }, [activeShipments, countryRules, allChecklistItems, baseRequiredIds]);
+  }, [activeShipments, getMissingRequiredDocs]);
   const missingDocsShipments = useMemo(() => {
     return activeShipments.filter((item) => !CLOSED_EXPORT_STATUSES.includes(item.status) && getMissingRequiredDocs(item).length > 0);
-  }, [activeShipments, countryRules, allChecklistItems, baseRequiredIds]);
+  }, [activeShipments, getMissingRequiredDocs]);
   const readyShipments = useMemo(() => {
     return activeShipments.filter((item) =>
       !CLOSED_EXPORT_STATUSES.includes(item.status) &&
@@ -1416,7 +1466,7 @@ export const AfricaExportsView: React.FC<AfricaExportsViewProps> = ({ initialRef
       Boolean(item.lastCheckedAt) &&
       Boolean(item.assignedTransporterId),
     );
-  }, [activeShipments, countryRules, allChecklistItems, baseRequiredIds]);
+  }, [activeShipments, getMissingRequiredDocs]);
   const approvedShipments = useMemo(() => activeShipments.filter((item) => Boolean(item.dispatchApprovedAt)), [activeShipments]);
   const pendingApprovalShipments = useMemo(() => activeShipments.filter((item) => !CLOSED_EXPORT_STATUSES.includes(item.status) && !item.dispatchApprovedAt), [activeShipments]);
   const exportCountries = useMemo(() => Array.from(new Set(trackedShipments.map((item) => item.destinationCountry).filter(Boolean))).sort(), [trackedShipments]);
@@ -1562,7 +1612,7 @@ export const AfricaExportsView: React.FC<AfricaExportsViewProps> = ({ initialRef
 
       return alerts;
     }).sort((a, b) => a.priority - b.priority).slice(0, 8);
-  }, [activeShipments, countryRules, allChecklistItems, baseRequiredIds]);
+  }, [activeShipments, allChecklistItems, getMissingRequiredDocs]);
   const assignedTransporter = transporters.find((item) => item.id === shipment.assignedTransporterId);
   const countryOptions = useMemo(() => {
     const countries = Array.from(new Set([...AFRICA_COUNTRIES, ...Object.keys(countryRules)]));
@@ -1570,6 +1620,7 @@ export const AfricaExportsView: React.FC<AfricaExportsViewProps> = ({ initialRef
     return [shipment.destinationCountry, ...countries];
   }, [countryRules, shipment.destinationCountry]);
   const destinationRequirement = countryRules[shipment.destinationCountry];
+  const customerRequirement = getCustomerRule(shipment.customer);
   const leadTimeGuide = getLeadTimeGuide(shipment.destinationCountry);
   const selectedLeadTimeMode = getLeadTimeModeForTransportMode(shipment.transportMode);
   const customsBufferDays = shipment.customsBufferDays ?? 2;
@@ -2267,6 +2318,25 @@ export const AfricaExportsView: React.FC<AfricaExportsViewProps> = ({ initialRef
       {remoteSyncError && (
         <div className="rounded-card border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
           {remoteSyncError}
+        </div>
+      )}
+
+      {customerRequirement && (
+        <div className="rounded-xl border-2 border-red-300 bg-red-50 px-4 py-4 text-red-900 shadow-sm" role="alert">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0 text-red-600" />
+            <div>
+              <p className="font-bold">Loading blocked until Speedlink authority is received</p>
+              <p className="mt-1 text-sm">
+                {shipment.customer}: obtain and verify the Speedlink Cargo Loading Authority before loading or dispatch. The authority and pre-alert attachment are mandatory dispatch documents.
+              </p>
+              {isYogurtStabiliserShipment(shipment) && (
+                <p className="mt-2 text-sm font-semibold">
+                  Yogurt Stabiliser: confirm tariff code 3824.9990, SADC preference, and EMA SI 268 of 2018 against the authority.
+                </p>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
@@ -3202,6 +3272,31 @@ export const AfricaExportsView: React.FC<AfricaExportsViewProps> = ({ initialRef
                           <span>{point}</span>
                         </div>
                       ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {customerRequirement && (
+                <Card className="overflow-hidden border-2 border-red-200">
+                  <CardHeader className="border-b border-red-100 bg-red-50 p-5">
+                    <CardTitle>{customerRequirement.title}</CardTitle>
+                    <p className="text-sm text-red-800">Customer-specific rule for {shipment.customer}. This requirement overrides any instruction to load before authority is confirmed.</p>
+                  </CardHeader>
+                  <CardContent className="p-5">
+                    <div className="space-y-2">
+                      {customerRequirement.points.map((point) => (
+                        <div key={point} className="flex gap-3 rounded-card border border-red-100 bg-red-50 p-3 text-sm text-red-900">
+                          <ShieldCheck className="mt-0.5 h-4 w-4 flex-shrink-0 text-red-600" />
+                          <span>{point}</span>
+                        </div>
+                      ))}
+                      {isYogurtStabiliserShipment(shipment) && (
+                        <div className="rounded-card border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+                          <p className="font-bold">Product-specific Loading Authority requirement</p>
+                          <p className="mt-1">Commodity: Yogurt Stabiliser · Tariff Code: 3824.9990 · Preferred Trade Agreement: SADC · Control / Compliance Document: EMA SI 268 of 2018</p>
+                        </div>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
