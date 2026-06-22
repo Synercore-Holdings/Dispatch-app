@@ -22,8 +22,14 @@ async function main() {
       orderBy: { createdAt: "asc" },
     });
     if (existingAdmin?.password.startsWith("$2")) {
-      console.log("A secured administrator already exists; skipping bootstrap.");
-      return;
+      const credentialsMatch =
+        existingAdmin.username === username &&
+        existingAdmin.email === email &&
+        await bcrypt.compare(password, existingAdmin.password);
+      if (credentialsMatch) {
+        console.log("The secured PTA administrator already exists; skipping bootstrap.");
+        return;
+      }
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
