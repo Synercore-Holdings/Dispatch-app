@@ -2,9 +2,9 @@ const { PrismaClient } = require("@prisma/client");
 const bcrypt = require("bcryptjs");
 
 async function main() {
-  const username = process.env.BOOTSTRAP_ADMIN_USERNAME;
-  const email = process.env.BOOTSTRAP_ADMIN_EMAIL;
-  const password = process.env.BOOTSTRAP_ADMIN_PASSWORD;
+  const username = process.env.BOOTSTRAP_ADMIN_USERNAME?.trim();
+  const email = process.env.BOOTSTRAP_ADMIN_EMAIL?.trim();
+  const password = process.env.BOOTSTRAP_ADMIN_PASSWORD?.trim();
 
   if (!username || !email || !password) {
     console.log("Bootstrap admin variables not set; skipping initial admin creation.");
