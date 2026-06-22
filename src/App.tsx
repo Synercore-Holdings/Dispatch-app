@@ -10,7 +10,8 @@ import { ConnectionStatus } from "./components/ConnectionStatus";
 import { HelpGuide } from "./components/HelpGuide";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { ErrorBoundary } from "./components/ErrorBoundary";
-import { useDispatch } from "./context/DispatchContext";
+import { DispatchProvider, useDispatch } from "./context/DispatchContext";
+import { mockDrivers } from "./data/mockData";
 import { Loader2, Mail } from "lucide-react";
 import { messagesAPI } from "./services/api";
 
@@ -284,11 +285,25 @@ function AppContent() {
   );
 }
 
+function AuthenticatedDispatchApp() {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  return (
+    <DispatchProvider
+      initialJobs={[]}
+      initialDrivers={mockDrivers}
+      useAPI={!isLoading && isAuthenticated}
+    >
+      <AppContent />
+    </DispatchProvider>
+  );
+}
+
 function App() {
   return (
     <NotificationProvider>
       <AuthProvider>
-        <AppContent />
+        <AuthenticatedDispatchApp />
       </AuthProvider>
     </NotificationProvider>
   );
