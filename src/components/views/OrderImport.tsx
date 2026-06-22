@@ -9,6 +9,7 @@ import { useDispatch } from "../../context/DispatchContext";
 import { useNotification } from "../../context/NotificationContext";
 import { useAuth } from "../../context/AuthContext";
 import { JobPriority, JobStatus } from "../../types";
+import { DEFAULT_PICKUP, DEFAULT_WAREHOUSE, isPtaWarehouse } from "../../config/site";
 
 /**
  * OrderImport component (Sales Orders mapping + ETA date normalization)
@@ -40,7 +41,6 @@ interface ImportedOrder {
 
 // === Tunables ===
 const DEFAULT_STATUS = "pending" as JobStatus;
-const DEFAULT_PICKUP = "K58 Warehouse";
 const DEFAULT_DROPOFF = "TBD";
 
 // ---------- Helpers ----------
@@ -210,24 +210,6 @@ const ALIASES: Record<keyof Omit<ImportedOrder, never>, string[]> = {
   notes: ["notes", "remarks", "comment", "inventory description", "description"],
 };
 
-// Warehouses whose rows are ignored on import (internal storage, not dispatchable).
-// Compared case-insensitively with collapsed whitespace and normalized dashes.
-const normalizeWarehouseForCompare = (s: string): string =>
-  s
-    .toLowerCase()
-    .replace(/[–—]/g, "-") // en/em dash -> hyphen
-    .replace(/\s+/g, " ")
-    .trim();
-
-const IGNORED_WAREHOUSES = new Set(
-  [
-    "Finished Goods AFi - Pretoria",
-    "Raw - AFi Pretoria",
-    "Dispatch Allmark - Pretoria",
-    "Raws - Allmark Pretoria",
-  ].map(normalizeWarehouseForCompare)
-);
-
 // ----- Row mapping with ETA normalization -----
 const rowToOrder = (headers: string[], row: any[], i: number): ImportedOrder | null => {
   const idx = indexHeaders(headers);
@@ -259,13 +241,13 @@ const rowToOrder = (headers: string[], row: any[], i: number): ImportedOrder | n
     safeStr(coalesce(row, idx["warehouse"])) ??
     safeStr(coalesce(row, warehouseIdx));
 
-  // Skip rows tied to internal/non-dispatch warehouses
-  if (warehouse && IGNORED_WAREHOUSES.has(normalizeWarehouseForCompare(warehouse))) {
+  // PTA deployment: skip rows belonging to warehouses outside Pretoria.
+  if (warehouse && !isPtaWarehouse(warehouse)) {
     return null;
   }
 
-  // Don't use "K58 Warehouse" as a warehouse value — it's the default pickup, not a warehouse
-  if (warehouse === "K58 Warehouse") warehouse = undefined;
+  // Files without a warehouse value default to PTA finished goods.
+  if (!warehouse) warehouse = DEFAULT_WAREHOUSE;
 
   // Pickup can be same as warehouse or a different field
   const pickup = warehouse ?? safeStr(coalesce(row, pickupIdx)) ?? DEFAULT_PICKUP;
@@ -364,11 +346,11 @@ export const OrderImport: React.FC = () => {
   const [isPurgingIgnored, setIsPurgingIgnored] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Existing orders that match the ignored-warehouse list (legacy rows imported before the filter)
+  // Existing customer orders outside this deployment's PTA scope.
   const ignoredWarehouseJobIds = useMemo(() => {
     return jobs
       .filter((j) => j.jobType !== "ibt")
-      .filter((j) => j.warehouse && IGNORED_WAREHOUSES.has(normalizeWarehouseForCompare(j.warehouse)))
+      .filter((j) => j.warehouse && !isPtaWarehouse(j.warehouse))
       .map((j) => j.id);
   }, [jobs]);
 
@@ -380,8 +362,8 @@ export const OrderImport: React.FC = () => {
     }
 
     const ok = await confirm({
-      title: "Remove Ignored-Warehouse Orders?",
-      message: `This will permanently delete ${ignoredWarehouseJobIds.length} order${ignoredWarehouseJobIds.length === 1 ? "" : "s"} whose Warehouse is one of the internal storage locations (Finished Goods AFi - Pretoria, Raw - AFi Pretoria, Dispatch Allmark - Pretoria, Raws - Allmark Pretoria). This cannot be undone.`,
+      title: "Remove Non-PTA Orders?",
+      message: `This will permanently delete ${ignoredWarehouseJobIds.length} order${ignoredWarehouseJobIds.length === 1 ? "" : "s"} assigned to warehouses outside the four PTA locations. This cannot be undone.`,
       type: "danger",
       confirmText: "Delete orders",
     });
@@ -610,7 +592,7 @@ export const OrderImport: React.FC = () => {
         "2025-10-10",
         "ITEM-001",
         "Sample Line — fragile",
-        "K58 Warehouse",
+        DEFAULT_WAREHOUSE,
         "120",
         "2025-10-01",
         "USER001",
@@ -626,7 +608,7 @@ export const OrderImport: React.FC = () => {
     } else {
       const data = [
         headers,
-        ["SO-0001", "Sample Customer", "Normal", "2025-10-10", "ITEM-001", "Sample Line — fragile", "K58 Warehouse", "120", "2025-10-01", "USER001"],
+        ["SO-0001", "Sample Customer", "Normal", "2025-10-10", "ITEM-001", "Sample Line — fragile", DEFAULT_WAREHOUSE, "120", "2025-10-01", "USER001"],
       ];
       const worksheet = XLSX.utils.aoa_to_sheet(data);
       const workbook = XLSX.utils.book_new();
@@ -660,7 +642,7 @@ export const OrderImport: React.FC = () => {
               onClick={purgeIgnoredWarehouseOrders}
               disabled={isPurgingIgnored}
               className="text-sm text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 hover:border-red-300"
-              title="Remove orders whose Warehouse matches the internal storage locations now ignored on import"
+              title="Remove customer orders assigned to warehouses outside PTA"
             >
               {isPurgingIgnored ? (
                 <span className="flex items-center gap-2">
@@ -670,7 +652,7 @@ export const OrderImport: React.FC = () => {
               ) : (
                 <>
                   <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-                  Remove Ignored Warehouses ({ignoredWarehouseJobIds.length})
+                  Remove Non-PTA Orders ({ignoredWarehouseJobIds.length})
                 </>
               )}
             </Button>

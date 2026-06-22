@@ -10,6 +10,7 @@ import { useDispatch } from "../../context/DispatchContext";
 import { useNotification } from "../../context/NotificationContext";
 import { useAuth } from "../../context/AuthContext";
 import { JobPriority, JobStatus } from "../../types";
+import { DEFAULT_PICKUP as PTA_DEFAULT_PICKUP } from "../../config/site";
 
 /**
  * IBTImport component (Internal Branch Transfer mapping)
@@ -40,7 +41,7 @@ interface ImportedOrder {
 // === Tunables ===
 const DEFAULT_STATUS = "pending" as JobStatus;
 const DEFAULT_CUSTOMER = "IBT - Internal Transfer";
-const DEFAULT_PICKUP = "Source Branch";
+const DEFAULT_PICKUP = PTA_DEFAULT_PICKUP;
 const DEFAULT_DROPOFF = "Destination Branch";
 
 // ---------- Helpers ----------
@@ -565,7 +566,7 @@ export const IBTImport: React.FC = () => {
     if (format === "csv") {
       const example = [
         "IBT-0001",
-        "K58 Warehouse",
+        DEFAULT_PICKUP,
         "K63 Warehouse",
         "2025-10-10",
         "Normal",
@@ -583,7 +584,7 @@ export const IBTImport: React.FC = () => {
     } else {
       const data = [
         headers,
-        ["IBT-0001", "K58 Warehouse", "K63 Warehouse", "2025-10-10", "Normal", "120", "Mixed items for K63"],
+        ["IBT-0001", DEFAULT_PICKUP, "K58 Warehouse", "2025-10-10", "Normal", "120", "Mixed items for K58"],
       ];
       const worksheet = XLSX.utils.aoa_to_sheet(data);
       const workbook = XLSX.utils.book_new();
@@ -905,7 +906,7 @@ export const IBTImport: React.FC = () => {
                     value={manualOrder.warehouse || ""}
                     onChange={(e) => setManualOrder({ ...manualOrder, warehouse: e.target.value, pickup: e.target.value })}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-resilinc-primary focus:border-transparent"
-                    placeholder="K58 Warehouse"
+                    placeholder={DEFAULT_PICKUP}
                   />
                 </div>
 

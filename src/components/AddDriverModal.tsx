@@ -124,7 +124,7 @@ export const AddDriverModal: React.FC<AddDriverModalProps> = ({ onClose, onSave 
             <Input
               value={formData.location}
               onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-              placeholder="e.g., K58 Warehouse"
+              placeholder="e.g., Pretoria Warehouse"
               disabled={isSaving}
               required
             />

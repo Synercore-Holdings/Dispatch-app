@@ -68,8 +68,8 @@ const guideSections: GuideSection[] = [
     tips: [
       "Date formats like DD/MM/YYYY, YYYY-MM-DD, and Excel serial numbers are all supported.",
       "Orders with the same reference number will be updated, not duplicated.",
-      "Rows whose Warehouse column matches internal storage locations (Finished Goods AFi - Pretoria, Raw - AFi Pretoria, Dispatch Allmark - Pretoria, Raws - Allmark Pretoria) are skipped automatically — they aren't dispatchable orders.",
-      "If the database still contains such legacy rows from earlier uploads, a red 'Remove Ignored Warehouses (N)' button appears in the header. Click it to delete them after a confirmation prompt.",
+      "This PTA deployment accepts Finished Goods AFi, Raw AFi, Dispatch Allmark, and Raws Allmark in Pretoria. Rows for other warehouses are skipped automatically.",
+      "Admins can remove legacy customer orders outside the PTA scope using the red 'Remove Non-PTA Orders' action. The action always requires confirmation.",
     ],
   },
   {
@@ -368,7 +368,7 @@ export const HelpGuide: React.FC<HelpGuideProps> = ({ open, onClose, onNavigateT
                 </>
               ) : (
                 <>
-                  <h3 className="text-xl font-bold" style={{ color: "#0f172a" }}>Welcome to K58 Dispatch</h3>
+                  <h3 className="text-xl font-bold" style={{ color: "#0f172a" }}>Welcome to PTA Dispatch</h3>
                   <p className="text-sm mt-1" style={{ color: "#64748b" }}>Select a section from the left to get started</p>
                 </>
               )}

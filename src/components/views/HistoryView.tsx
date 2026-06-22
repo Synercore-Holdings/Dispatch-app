@@ -281,7 +281,7 @@ export const HistoryView: React.FC = () => {
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(16);
     doc.setFont("helvetica", "bold");
-    doc.text("K58 Dispatch", 14, 10);
+    doc.text("PTA Dispatch", 14, 10);
     doc.setFontSize(9);
     doc.setFont("helvetica", "normal");
     doc.setTextColor(148, 163, 184);
@@ -421,7 +421,7 @@ export const HistoryView: React.FC = () => {
         doc.setTextColor(148, 163, 184);
         doc.setFontSize(6.5);
         doc.setFont("helvetica", "normal");
-        doc.text("K58 Dispatch — Confidential", 14, pageH - 5);
+        doc.text("PTA Dispatch — Confidential", 14, pageH - 5);
         doc.text(reportDate, pw / 2, pageH - 5, { align: "center" });
         doc.text(
           `Page ${(doc as any).internal.getCurrentPageInfo().pageNumber}`,

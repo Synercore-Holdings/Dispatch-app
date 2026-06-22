@@ -1,6 +1,6 @@
 // Centralized constants - avoid magic strings scattered through code
 
-export const DEFAULT_PICKUP = "K58 Warehouse";
+export { DEFAULT_PICKUP } from "../config/site";
 export const DEFAULT_DROPOFF = "TBD";
 export const DEFAULT_STATUS = "pending" as const;
 

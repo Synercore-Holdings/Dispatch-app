@@ -571,7 +571,7 @@ export const AdvancedAnalytics: React.FC = () => {
         doc.line(14, pageHeight - 10, pageWidth - 14, pageHeight - 10);
         doc.setTextColor(148, 163, 184);
         doc.setFontSize(6.5);
-        doc.text("K58 Dispatch", 14, pageHeight - 5);
+        doc.text("PTA Dispatch", 14, pageHeight - 5);
         doc.text(`Generated ${generatedDate}`, pageWidth / 2, pageHeight - 5, { align: "center" });
         doc.text(`Page ${(doc as any).internal.getCurrentPageInfo().pageNumber}`, pageWidth - 14, pageHeight - 5, { align: "right" });
       },
@@ -772,7 +772,7 @@ export const AdvancedAnalytics: React.FC = () => {
         const pageHeight = doc.internal.pageSize.getHeight();
         doc.setTextColor(148, 163, 184);
         doc.setFontSize(6.5);
-        doc.text("K58 Dispatch", 14, pageHeight - 5);
+        doc.text("PTA Dispatch", 14, pageHeight - 5);
         doc.text(`Generated ${generatedDate}`, pageWidth / 2, pageHeight - 5, { align: "center" });
         doc.text(`Page ${(doc as any).internal.getCurrentPageInfo().pageNumber}`, pageWidth - 14, pageHeight - 5, { align: "right" });
       },

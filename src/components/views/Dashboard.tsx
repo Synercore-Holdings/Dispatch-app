@@ -438,7 +438,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onOpenAlerts, onNavigate }
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold text-gray-900">K58 Dispatch</h1>
+          <h1 className="text-2xl font-bold text-gray-900">PTA Dispatch</h1>
           <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-blue-100 text-blue-700 text-xs font-bold">
             Week {getWeekNumber(new Date())}
           </span>

@@ -26,6 +26,7 @@ import { WarehouseSelector } from "../WarehouseSelector";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/Card";
 import { Button } from "../ui/Button";
 import { africaExportsAPI } from "../../services/api";
+import { DEFAULT_PICKUP } from "../../config/site";
 
 import type { Job, Driver, JobPriority, JobStatus } from "../../types";
 import type { AfricaExportShipment } from "../../services/api";
@@ -58,7 +59,7 @@ export const DispatchView: React.FC<DispatchViewProps> = ({ onOpenAlerts, initia
   const [newJob, setNewJob] = useState({
     ref: "",
     customer: "",
-    pickup: "K58 Warehouse",
+    pickup: DEFAULT_PICKUP,
     dropoff: "TBD",
     warehouse: "",
     serviceType: "delivery" as "collection" | "delivery",
@@ -601,7 +602,7 @@ export const DispatchView: React.FC<DispatchViewProps> = ({ onOpenAlerts, initia
       await jobsAPI.create({
         ref: newJob.ref,
         customer: newJob.customer,
-        pickup: newJob.pickup || "K58 Warehouse",
+        pickup: newJob.pickup || DEFAULT_PICKUP,
         dropoff: newJob.dropoff || "TBD",
         warehouse: newJob.warehouse,
         priority: newJob.priority,
@@ -618,7 +619,7 @@ export const DispatchView: React.FC<DispatchViewProps> = ({ onOpenAlerts, initia
       setNewJob({
         ref: "",
         customer: "",
-        pickup: "K58 Warehouse",
+        pickup: DEFAULT_PICKUP,
         dropoff: "TBD",
         warehouse: "",
         serviceType: "delivery",

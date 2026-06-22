@@ -78,7 +78,7 @@ export const Login: React.FC<LoginProps> = ({ onPrivacy }) => {
           <DeliveryIllustration className="w-full h-auto" />
           <div className="mt-8 max-w-md">
             <h2 className="text-2xl font-semibold mb-2" style={{ color: "#1f2937" }}>
-              Dispatch Management
+              PTA Warehouse Dispatch
             </h2>
             <p className="text-sm leading-relaxed" style={{ color: "#6b7280" }}>
               Track orders, assign transporters, and manage every delivery from one place.
@@ -99,7 +99,7 @@ export const Login: React.FC<LoginProps> = ({ onPrivacy }) => {
               draggable={false}
             />
             <h1 className="text-xl font-semibold" style={{ color: "#1f2937" }}>
-              Dispatch Management
+              PTA Warehouse Dispatch
             </h1>
           </div>
 
