@@ -8,8 +8,12 @@ const prisma = globalForPrisma.prisma || new PrismaClient();
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
 function setCors(res: VercelResponse, _req: VercelRequest) {
-  const allowedOrigin = process.env.FRONTEND_URL || "";
-  res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
+  const allowedOrigin = (process.env.FRONTEND_URL || "").trim();
+
+  if (allowedOrigin) {
+    res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
+  }
+
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 }
