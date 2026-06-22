@@ -17,17 +17,28 @@ async function main() {
 
   const prisma = new PrismaClient();
   try {
-    const existingAdmin = await prisma.user.findFirst({ where: { role: "admin" } });
-    if (existingAdmin) {
-      console.log("An administrator already exists; skipping bootstrap.");
+    const existingAdmin = await prisma.user.findFirst({
+      where: { role: "admin" },
+      orderBy: { createdAt: "asc" },
+    });
+    if (existingAdmin?.password.startsWith("$2")) {
+      console.log("A secured administrator already exists; skipping bootstrap.");
       return;
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
-    await prisma.user.create({
-      data: { username, email, password: passwordHash, role: "admin" },
-    });
-    console.log("Initial PTA administrator created.");
+    if (existingAdmin) {
+      await prisma.user.update({
+        where: { id: existingAdmin.id },
+        data: { username, email, password: passwordHash, role: "admin" },
+      });
+      console.log("Legacy administrator upgraded to the secured PTA administrator.");
+    } else {
+      await prisma.user.create({
+        data: { username, email, password: passwordHash, role: "admin" },
+      });
+      console.log("Initial PTA administrator created.");
+    }
   } finally {
     await prisma.$disconnect();
   }
