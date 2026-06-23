@@ -17,5 +17,13 @@ const normalizeWarehouse = (value: string) =>
 
 const PTA_WAREHOUSE_KEYS = new Set(PTA_WAREHOUSES.map(normalizeWarehouse));
 
+export const isIgnoredWarehouse = (value?: string): boolean =>
+  Boolean(value && normalizeWarehouse(value).includes("k58"));
+
 export const isPtaWarehouse = (value?: string): boolean =>
-  Boolean(value && PTA_WAREHOUSE_KEYS.has(normalizeWarehouse(value)));
+  Boolean(
+    value &&
+      !isIgnoredWarehouse(value) &&
+      (PTA_WAREHOUSE_KEYS.has(normalizeWarehouse(value)) ||
+        normalizeWarehouse(value).includes("pretoria"))
+  );

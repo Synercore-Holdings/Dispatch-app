@@ -241,13 +241,10 @@ const rowToOrder = (headers: string[], row: any[], i: number): ImportedOrder | n
     safeStr(coalesce(row, idx["warehouse"])) ??
     safeStr(coalesce(row, warehouseIdx));
 
-  // PTA deployment: skip rows belonging to warehouses outside Pretoria.
-  if (warehouse && !isPtaWarehouse(warehouse)) {
+  // PTA deployment: import only rows that explicitly belong to Pretoria warehouses.
+  if (!warehouse || !isPtaWarehouse(warehouse)) {
     return null;
   }
-
-  // Files without a warehouse value default to PTA finished goods.
-  if (!warehouse) warehouse = DEFAULT_WAREHOUSE;
 
   // Pickup can be same as warehouse or a different field
   const pickup = warehouse ?? safeStr(coalesce(row, pickupIdx)) ?? DEFAULT_PICKUP;
