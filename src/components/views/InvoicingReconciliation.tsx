@@ -1749,8 +1749,8 @@ export const InvoicingReconciliation: React.FC<InvoicingReconciliationProps> = (
 
   const downloadTemplate = async () => {
     const data = [
-      ["Invoice No", "Source Sales Order", "Document Date", "Delivery / Due Date", "Customer", "Created By", "Delivery Status", "Status", "Posted Date", "Invoice Qty"],
-      ["INV-0001", "SO-0001", "2026-06-03", "2026-06-05", "Customer Name", "Creator Name", "Delivered", "Posted", "2026-06-03", "100"],
+      ["Invoice No", "Source Sales Order", "Document Date", "Delivery / Due Date", "Customer", "Created By", "Posted Date"],
+      ["INV-0001", "SO-0001", "2026-06-03", "2026-06-05", "Customer Name", "Creator Name", "2026-06-03"],
     ];
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(data), "InvoiceUpload");
@@ -2596,7 +2596,7 @@ export const InvoicingReconciliation: React.FC<InvoicingReconciliationProps> = (
           {invoiceLines.length === 0 && (
             <div className="m-5 flex items-start gap-3 rounded-card border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
               <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
-              <p>Upload an invoice spreadsheet to compare against delivered ASOs. Your current file can use Source Sales Order as the ASO, with Invoice No, Document Date, Customer, Created By, Delivery Status, Status, and Posted Date. Invoice Qty is optional.</p>
+              <p>Upload an invoice spreadsheet to compare against delivered ASOs. Your current file can use Source Sales Order as the ASO, with Invoice No, Document Date, Delivery / Due Date, Customer, Created By, and Posted Date.</p>
             </div>
           )}
           {invoiceLines.length > 0 && invoiceLinesInView.length === 0 && (
