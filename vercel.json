@@ -5,7 +5,7 @@
       "schedule": "0 2 * * *"
     }
   ],
-  "buildCommand": "prisma migrate deploy && prisma generate && node scripts/bootstrap-admin.cjs && npm run build",
+  "buildCommand": "PRISMA_SCHEMA_DISABLE_ADVISORY_LOCK=1 prisma migrate deploy && prisma generate && node scripts/bootstrap-admin.cjs && npm run build",
   "outputDirectory": "dist",
   "devCommand": "npm run dev",
   "installCommand": "npm install",
