@@ -3,7 +3,6 @@ import {
   LayoutDashboard,
   Home,
   ClipboardCheck,
-  ClipboardList,
   Calendar,
   Grid3x3,
   Clock,
@@ -192,7 +191,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeItem, onItemChange, coll
         { id: "home", icon: Home, label: "Import Customer Orders" },
         { id: "ibt", icon: ArrowRightLeft, label: "Import IBT" },
         { id: "ibt-dispatch", icon: Truck, label: "IBT Management", badge: sidebarStats.ibtPendingCount, badgeType: "info" },
-        { id: "clipboard", icon: ClipboardList, label: "Order Management", badge: sidebarStats.pendingCount, badgeType: "info" },
         {
           id: "africa-exports",
           icon: Globe2,

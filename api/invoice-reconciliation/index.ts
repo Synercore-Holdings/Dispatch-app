@@ -179,6 +179,47 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             });
           }),
         );
+
+        // Auto-deliver matching jobs: group by ASO, sum qty, set status=delivered + pallets
+        const asoMap = new Map<string, { totalQty: number; invoiceDate: string | null }>();
+        for (const line of lines as Record<string, unknown>[]) {
+          const aso = normalize(line.aso);
+          if (!aso) continue;
+          const qty = Number.isFinite(Number(line.invoiceQty)) ? Number(line.invoiceQty) : 0;
+          const invoiceDate = normalize(line.invoiceDate) || null;
+          const existing = asoMap.get(aso);
+          if (existing) {
+            existing.totalQty += qty;
+            if (!existing.invoiceDate && invoiceDate) existing.invoiceDate = invoiceDate;
+          } else {
+            asoMap.set(aso, { totalQty: qty, invoiceDate });
+          }
+        }
+        const asos = Array.from(asoMap.keys());
+        if (asos.length > 0) {
+          const matchingJobs = await prisma.job.findMany({
+            where: { ref: { in: asos } },
+            select: { id: true, ref: true },
+          });
+          if (matchingJobs.length > 0) {
+            const today = new Date().toISOString().slice(0, 10);
+            await prisma.$transaction(
+              matchingJobs.map((job) => {
+                const asoData = asoMap.get(job.ref)!;
+                const pallets = asoData.totalQty > 0 ? Math.ceil(asoData.totalQty / 1000) : undefined;
+                return prisma.job.update({
+                  where: { id: job.id },
+                  data: {
+                    status: "delivered",
+                    actualDeliveryAt: asoData.invoiceDate || today,
+                    ...(pallets !== undefined ? { pallets } : {}),
+                  },
+                });
+              }),
+            );
+          }
+        }
+
         return res.status(201).json({ success: true, data: result.map(formatLine) });
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "Failed to save invoice reconciliation rows";
