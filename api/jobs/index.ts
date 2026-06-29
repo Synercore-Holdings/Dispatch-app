@@ -62,7 +62,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         const allowedFields = [
           "ref", "customer", "pickup", "dropoff", "warehouse", "priority", "status",
-          "pallets", "outstandingQty", "eta", "scheduledAt", "dispatchedAt", "actualDeliveryAt",
+          "pallets", "outstandingQty", "totalExclVat", "eta", "scheduledAt", "dispatchedAt", "actualDeliveryAt",
           "sourceCreatedDate", "sourceCreatedBy",
           "returnedAt", "returnReason", "returnedPallets", "returnNotes",
           "exceptionReason", "overdueReason", "driverId", "notes", "internalNotes", "transporterBooked", "orderPicked",
@@ -174,7 +174,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         const allowedFields = [
           "ref", "customer", "pickup", "dropoff", "warehouse", "priority", "status",
-          "pallets", "outstandingQty", "eta", "scheduledAt", "dispatchedAt", "actualDeliveryAt",
+          "pallets", "outstandingQty", "totalExclVat", "eta", "scheduledAt", "dispatchedAt", "actualDeliveryAt",
           "sourceCreatedDate", "sourceCreatedBy",
           "returnedAt", "returnReason", "returnedPallets", "returnNotes",
           "exceptionReason", "overdueReason", "driverId", "notes", "internalNotes", "transporterBooked", "orderPicked",
@@ -228,6 +228,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           warehouse: job.warehouse as string | undefined,
           priority: (job.priority as string) || "normal", status: (job.status as string) || "pending", jobType,
           pallets: job.pallets as number | undefined, outstandingQty: job.outstandingQty as number | undefined,
+          totalExclVat: job.totalExclVat as number | undefined,
           sourceCreatedDate: job.sourceCreatedDate as string | undefined, sourceCreatedBy: job.sourceCreatedBy as string | undefined,
           eta: job.eta as string | undefined, scheduledAt: job.scheduledAt as string | undefined,
           dispatchedAt: job.dispatchedAt as string | undefined,
@@ -270,6 +271,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           priority: (job.priority as string) || "normal", status: (job.status as string) || "pending",
           jobType: (job.jobType as string) || "order",
           pallets: job.pallets as number | undefined, outstandingQty: job.outstandingQty as number | undefined,
+          totalExclVat: job.totalExclVat as number | undefined,
           sourceCreatedDate: job.sourceCreatedDate as string | undefined, sourceCreatedBy: job.sourceCreatedBy as string | undefined,
           eta: job.eta as string | undefined, scheduledAt: job.scheduledAt as string | undefined,
           dispatchedAt: job.dispatchedAt as string | undefined,
@@ -320,6 +322,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           priority: req.body.priority || "normal", status: req.body.status || "pending",
           jobType: req.body.jobType || "order",
           pallets: req.body.pallets, outstandingQty: req.body.outstandingQty,
+          totalExclVat: req.body.totalExclVat,
           sourceCreatedDate: req.body.sourceCreatedDate, sourceCreatedBy: req.body.sourceCreatedBy,
           eta: req.body.eta, scheduledAt: req.body.scheduledAt, dispatchedAt: req.body.dispatchedAt, actualDeliveryAt: req.body.actualDeliveryAt,
           returnedAt: req.body.returnedAt, returnReason: req.body.returnReason,

@@ -85,6 +85,7 @@ export interface Job {
 
   pallets?: number;
   outstandingQty?: number;  // Outstanding quantity from Excel import
+  totalExclVat?: number;    // Total value excl. VAT from sales order import
   sourceCreatedDate?: string; // Source-system DateCreated from sales order import
   sourceCreatedBy?: string;   // Source-system CreatedByUserid from sales order import
 

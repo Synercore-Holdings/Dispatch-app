@@ -1074,6 +1074,23 @@ export const InvoicingReconciliation: React.FC<InvoicingReconciliationProps> = (
     return orderJobs;
   }, [activeMonth, activeWeek, jobs, viewMode]);
 
+  const monthlyOrderValues = useMemo(() => {
+    const orderJobs = jobs.filter((job) => job.jobType === "order" || job.jobType === undefined);
+    const byMonth = new Map<string, { totalExclVat: number; orderCount: number }>();
+    orderJobs.forEach((job) => {
+      if (!job.totalExclVat) return;
+      const month = getMonthKey(getOrderSourceDate(job));
+      if (!month) return;
+      const existing = byMonth.get(month) || { totalExclVat: 0, orderCount: 0 };
+      existing.totalExclVat += job.totalExclVat;
+      existing.orderCount += 1;
+      byMonth.set(month, existing);
+    });
+    return Array.from(byMonth.entries())
+      .map(([month, data]) => ({ month, ...data }))
+      .sort((a, b) => b.month.localeCompare(a.month));
+  }, [jobs]);
+
   const creatorWorkload = useMemo<CreatorWorkload[]>(() => {
     const statusByAso = new Map(reconciliationRows.map((row) => [row.aso, row.status]));
     const byCreator = new Map<string, { orderRows: number; orderQty: number; invoiceRows: number; asos: Set<string>; invoices: Set<string>; matchedAsos: Set<string>; months: Set<string> }>();
@@ -2059,6 +2076,26 @@ export const InvoicingReconciliation: React.FC<InvoicingReconciliationProps> = (
           );
         })}
       </div>
+
+      {monthlyOrderValues.length > 0 && (
+        <Card className="overflow-hidden">
+          <CardHeader className="border-b border-gray-100 px-5 py-4">
+            <CardTitle className="text-base">Order Value by Month — Excl. VAT</CardTitle>
+            <p className="text-xs text-gray-500">Grouped by order creation date. Orders invoiced in a later month still appear in their original order month.</p>
+          </CardHeader>
+          <CardContent className="p-4">
+            <div className="flex flex-wrap gap-3">
+              {monthlyOrderValues.map(({ month, totalExclVat, orderCount }) => (
+                <div key={month} className="min-w-[160px] rounded-lg border border-gray-200 border-l-[3px] border-l-violet-500 bg-white px-4 py-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{month}</p>
+                  <p className="mt-1 text-xl font-bold text-gray-900">R {formatNumber(Math.round(totalExclVat))}</p>
+                  <p className="mt-0.5 text-[11px] text-gray-500">{formatNumber(orderCount)} order line{orderCount === 1 ? "" : "s"}</p>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="overflow-hidden">
         <CardContent className="p-4">

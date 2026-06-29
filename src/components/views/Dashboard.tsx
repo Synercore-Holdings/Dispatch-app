@@ -10,6 +10,7 @@ import {
   TrendingUp,
   Minus,
   Bell,
+  Banknote,
 } from "lucide-react";
 import { GlobalSearch } from "../GlobalSearch";
 import { JobDetailsModal } from "../JobDetailsModal";
@@ -183,6 +184,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onOpenAlerts, onNavigate }
     const ordersDispatchedThisWeek = movedRefsThisWeek.size;
     const palletsDispatchedThisWeek = movedLineItemsThisWeek.reduce((sum, job) => sum + (job.pallets || 0), 0);
     const qtyDispatchedThisWeek = movedLineItemsThisWeek.reduce((sum, job) => sum + (job.outstandingQty || 0), 0);
+    const totalExclVat = orderJobs.reduce((sum, job) => sum + (job.totalExclVat || 0), 0);
     const palletsDispatchedThisYear = orderJobs.reduce((sum, job) => {
       const palletDate = getDispatchDate(job);
       if (!palletDate) return sum;
@@ -265,6 +267,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onOpenAlerts, onNavigate }
       deliveredMissingDispatchCount: deliveredMissingDispatchThisWeek.size,
       alertCount,
       highVolumeWins,
+      totalExclVat,
     };
   }, [orderJobs, jobs, drivers]);
 
@@ -430,6 +433,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ onOpenAlerts, onNavigate }
       changeType: africaExportStats.total > 0 ? "up" as const : "neutral" as const,
       sublabel: africaExportStats.open > 0 ? `${africaExportStats.open} Open` : "No Open Exports",
       borderColor: "border-l-emerald-500", iconBg: "bg-emerald-50", iconColor: "text-emerald-500", nav: "africa-exports", tab: undefined,
+    },
+    {
+      icon: Banknote, value: stats.totalExclVat > 0 ? `R ${formatNumber(Math.round(stats.totalExclVat))}` : "R 0", label: "TOTAL EXCL VAT",
+      change: "all imported orders",
+      changeType: stats.totalExclVat > 0 ? "up" as const : "neutral" as const,
+      sublabel: stats.totalExclVat > 0 ? "Order Value" : "No Value",
+      borderColor: "border-l-violet-500", iconBg: "bg-violet-50", iconColor: "text-violet-500", nav: "import", tab: undefined,
     },
   ];
 

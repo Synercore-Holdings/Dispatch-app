@@ -26,6 +26,7 @@ model Job {
 
   pallets          Int?
   outstandingQty   Int?
+  totalExclVat     Float?
   sourceCreatedDate String?  @db.VarChar(255)
   sourceCreatedBy   String?  @db.VarChar(255)
 
