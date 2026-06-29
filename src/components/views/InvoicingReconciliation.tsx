@@ -665,6 +665,7 @@ const parseInvoiceWorkbook = async (file: File): Promise<InvoiceLine[]> => {
   const buffer = await file.arrayBuffer();
   const workbook = await XLSX.read(buffer, { type: "array", cellDates: true });
   const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+  if (!worksheet) throw new Error("No readable sheet found. Please save the file as .xlsx and try again.");
   const rows = XLSX.utils.sheet_to_json(worksheet, { defval: "" }) as Record<string, unknown>[];
   const parsedLines: InvoiceLine[] = [];
 
@@ -696,6 +697,7 @@ const parseNotLoadedDeliveryWorkbook = async (file: File): Promise<NotLoadedDeli
   const buffer = await file.arrayBuffer();
   const workbook = await XLSX.read(buffer, { type: "array", cellDates: true });
   const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+  if (!worksheet) throw new Error("No readable sheet found. Please save the file as .xlsx and try again.");
   const rows = XLSX.utils.sheet_to_json(worksheet, { defval: "" }) as Record<string, unknown>[];
 
   return rows.map((row) => {
@@ -1473,6 +1475,11 @@ export const InvoicingReconciliation: React.FC<InvoicingReconciliationProps> = (
 
   const importInvoices = async (file: File | undefined) => {
     if (!file) return;
+    if (file.name.toLowerCase().endsWith(".xls")) {
+      showError("Please save the file as .xlsx (Excel Workbook) before uploading. The older .xls format is not supported.");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
     setIsImporting(true);
     try {
       const lines = await parseInvoiceWorkbook(file);
