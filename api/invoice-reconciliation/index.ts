@@ -179,7 +179,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             });
           }),
         );
-        return res.status(201).json({ success: true, data: result.map(formatLine) });
+
+        // Auto-deliver jobs whose ref matches an ASO in this upload
+        const asoDateMap = new Map<string, string>();
+        result.forEach((line) => {
+          if (line.aso && line.invoiceDate) asoDateMap.set(line.aso, line.invoiceDate);
+        });
+        const asos = Array.from(asoDateMap.keys());
+        let autoDelivered: { ref: string; customer: string }[] = [];
+        if (asos.length > 0) {
+          const matchingJobs = await prisma.job.findMany({
+            where: { ref: { in: asos }, status: { notIn: ["delivered", "returned", "cancelled"] } },
+            select: { id: true, ref: true, customer: true },
+          });
+          if (matchingJobs.length > 0) {
+            const updates = matchingJobs.map((job) =>
+              prisma.job.update({
+                where: { id: job.id },
+                data: {
+                  status: "delivered",
+                  actualDeliveryAt: asoDateMap.get(job.ref) || new Date().toISOString(),
+                },
+              }),
+            );
+            await prisma.$transaction(updates);
+            const seen = new Set<string>();
+            autoDelivered = matchingJobs
+              .filter((j) => { if (seen.has(j.ref)) return false; seen.add(j.ref); return true; })
+              .map((j) => ({ ref: j.ref, customer: j.customer }));
+          }
+        }
+
+        return res.status(201).json({ success: true, data: result.map(formatLine), autoDelivered });
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "Failed to save invoice reconciliation rows";
         if (message.includes("required") || message.includes("too long")) {
