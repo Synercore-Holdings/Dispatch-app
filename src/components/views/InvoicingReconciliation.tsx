@@ -1080,22 +1080,40 @@ export const InvoicingReconciliation: React.FC<InvoicingReconciliationProps> = (
   }, [activeMonth, activeWeek, jobs, viewMode]);
 
   // Monthly order value totals — grouped by sourceCreatedDate month (not invoice date)
+  // Monthly order value cards — grouped by ETA month, one entry per unique ASO
   const monthlyOrderValues = useMemo(() => {
     const orderJobs = jobs.filter((job) => job.jobType === "order" || job.jobType === undefined);
-    const byMonth = new Map<string, { total: number; orderCount: number }>();
+    // Aggregate per unique ASO first (sum value across line items for same ref)
+    const byAso = new Map<string, { totalExclVat: number; etaMonth: string }>();
     orderJobs.forEach((job) => {
       if (!job.totalExclVat) return;
-      const monthKey = getMonthKey(getOrderSourceDate(job));
-      if (!monthKey) return;
-      const existing = byMonth.get(monthKey) || { total: 0, orderCount: 0 };
-      existing.total += job.totalExclVat;
-      existing.orderCount += 1;
-      byMonth.set(monthKey, existing);
+      const etaMonth = getMonthKey(normalizeDate(job.eta || ""));
+      if (!etaMonth) return;
+      const aso = normalizeAso(job.ref);
+      const existing = byAso.get(aso);
+      if (existing) {
+        existing.totalExclVat += job.totalExclVat;
+      } else {
+        byAso.set(aso, { totalExclVat: job.totalExclVat, etaMonth });
+      }
+    });
+    // Group ASOs by month
+    const byMonth = new Map<string, { total: number; asoCount: number; outstandingTotal: number; outstandingAsos: number }>();
+    byAso.forEach(({ totalExclVat, etaMonth }, aso) => {
+      const isInvoiced = invoicedByAso.has(aso);
+      const existing = byMonth.get(etaMonth) || { total: 0, asoCount: 0, outstandingTotal: 0, outstandingAsos: 0 };
+      existing.total += totalExclVat;
+      existing.asoCount += 1;
+      if (!isInvoiced) {
+        existing.outstandingTotal += totalExclVat;
+        existing.outstandingAsos += 1;
+      }
+      byMonth.set(etaMonth, existing);
     });
     return Array.from(byMonth.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
+      .sort(([a], [b]) => b.localeCompare(a))
       .map(([monthKey, data]) => ({ monthKey, ...data }));
-  }, [jobs]);
+  }, [jobs, invoicedByAso]);
 
   const creatorWorkload = useMemo<CreatorWorkload[]>(() => {
     const statusByAso = new Map(reconciliationRows.map((row) => [row.aso, row.status]));
@@ -2129,13 +2147,22 @@ export const InvoicingReconciliation: React.FC<InvoicingReconciliationProps> = (
 
       {monthlyOrderValues.length > 0 && (
         <div>
-          <p className="mb-2 text-sm font-semibold text-gray-700">Order Value by Month — Excl. VAT</p>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-            {monthlyOrderValues.map(({ monthKey, total, orderCount }) => (
+          <p className="mb-1 text-sm font-semibold text-gray-700">Order Value by Month — Excl. VAT</p>
+          <p className="mb-3 text-xs text-blue-600">K58 warehouse orders only, grouped by delivery due date (ETA). Shows total order value expected per month and what was not yet invoiced.</p>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+            {monthlyOrderValues.map(({ monthKey, total, asoCount, outstandingTotal, outstandingAsos }) => (
               <div key={monthKey} className="rounded-lg border border-gray-200 border-l-[3px] border-l-violet-500 bg-white p-3">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{monthKey}</p>
-                <p className="mt-1 text-lg font-bold text-gray-900">R {total.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                <p className="mt-1 text-xs text-gray-400">{orderCount} line{orderCount !== 1 ? "s" : ""}</p>
+                <p className="text-[11px] font-semibold text-gray-400">{monthKey}</p>
+                <p className="mt-1 text-xl font-bold text-gray-900">R {Math.round(total).toLocaleString("en-ZA")}</p>
+                <p className="mt-0.5 text-xs text-gray-500">{asoCount} ASO{asoCount !== 1 ? "s" : ""} total</p>
+                {outstandingAsos > 0 && (
+                  <>
+                    <div className="my-2 border-t border-gray-100" />
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Outstanding</p>
+                    <p className="mt-0.5 text-sm font-bold text-amber-600">R {Math.round(outstandingTotal).toLocaleString("en-ZA")}</p>
+                    <p className="text-xs text-amber-500">{outstandingAsos} ASO{outstandingAsos !== 1 ? "s" : ""} not invoiced</p>
+                  </>
+                )}
               </div>
             ))}
           </div>
