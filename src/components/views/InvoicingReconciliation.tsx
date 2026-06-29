@@ -1082,8 +1082,16 @@ export const InvoicingReconciliation: React.FC<InvoicingReconciliationProps> = (
   // Monthly order value totals — grouped by sourceCreatedDate month (not invoice date)
   // Monthly order value cards — grouped by ETA month, one entry per unique ASO
   const monthlyOrderValues = useMemo(() => {
-    const orderJobs = jobs.filter((job) => job.jobType === "order" || job.jobType === undefined);
-    // Aggregate per unique ASO first (sum value across line items for same ref)
+    const now = new Date();
+    const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+
+    // K58 orders only — exclude any PTA/Pretoria warehouse rows that may exist historically
+    const orderJobs = jobs.filter((job) =>
+      (job.jobType === "order" || job.jobType === undefined) &&
+      !(job.warehouse && job.warehouse.toLowerCase().includes("pretoria"))
+    );
+
+    // Aggregate per unique ASO first (sum totalExclVat across line items for the same ref)
     const byAso = new Map<string, { totalExclVat: number; etaMonth: string }>();
     orderJobs.forEach((job) => {
       if (!job.totalExclVat) return;
@@ -1097,19 +1105,24 @@ export const InvoicingReconciliation: React.FC<InvoicingReconciliationProps> = (
         byAso.set(aso, { totalExclVat: job.totalExclVat, etaMonth });
       }
     });
-    // Group ASOs by month
-    const byMonth = new Map<string, { total: number; asoCount: number; outstandingTotal: number; outstandingAsos: number }>();
+
+    // Group ASOs by ETA month
+    const byMonth = new Map<string, { total: number; asoCount: number; missedTotal: number; missedAsos: number; isCurrentMonth: boolean }>();
     byAso.forEach(({ totalExclVat, etaMonth }, aso) => {
       const isInvoiced = invoicedByAso.has(aso);
-      const existing = byMonth.get(etaMonth) || { total: 0, asoCount: 0, outstandingTotal: 0, outstandingAsos: 0 };
+      const isCurrentMonth = etaMonth === currentMonthKey;
+      const existing = byMonth.get(etaMonth) || { total: 0, asoCount: 0, missedTotal: 0, missedAsos: 0, isCurrentMonth };
       existing.total += totalExclVat;
       existing.asoCount += 1;
+      // Current month: outstanding (not yet invoiced, still dynamic)
+      // Past months: missed (not invoiced — permanently locked in as missed for that month)
       if (!isInvoiced) {
-        existing.outstandingTotal += totalExclVat;
-        existing.outstandingAsos += 1;
+        existing.missedTotal += totalExclVat;
+        existing.missedAsos += 1;
       }
       byMonth.set(etaMonth, existing);
     });
+
     return Array.from(byMonth.entries())
       .sort(([a], [b]) => b.localeCompare(a))
       .map(([monthKey, data]) => ({ monthKey, ...data }));
@@ -2148,23 +2161,32 @@ export const InvoicingReconciliation: React.FC<InvoicingReconciliationProps> = (
       {monthlyOrderValues.length > 0 && (
         <div>
           <p className="mb-1 text-sm font-semibold text-gray-700">Order Value by Month — Excl. VAT</p>
-          <p className="mb-3 text-xs text-blue-600">K58 warehouse orders only, grouped by delivery due date (ETA). Shows total order value expected per month and what was not yet invoiced.</p>
+          <p className="mb-3 text-xs text-blue-600">K58 warehouse orders only, grouped by delivery due date (ETA). Shows total order value expected per month and what was missed.</p>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-            {monthlyOrderValues.map(({ monthKey, total, asoCount, outstandingTotal, outstandingAsos }) => (
-              <div key={monthKey} className="rounded-lg border border-gray-200 border-l-[3px] border-l-violet-500 bg-white p-3">
-                <p className="text-[11px] font-semibold text-gray-400">{monthKey}</p>
-                <p className="mt-1 text-xl font-bold text-gray-900">R {Math.round(total).toLocaleString("en-ZA")}</p>
-                <p className="mt-0.5 text-xs text-gray-500">{asoCount} ASO{asoCount !== 1 ? "s" : ""} total</p>
-                {outstandingAsos > 0 && (
-                  <>
-                    <div className="my-2 border-t border-gray-100" />
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Outstanding</p>
-                    <p className="mt-0.5 text-sm font-bold text-amber-600">R {Math.round(outstandingTotal).toLocaleString("en-ZA")}</p>
-                    <p className="text-xs text-amber-500">{outstandingAsos} ASO{outstandingAsos !== 1 ? "s" : ""} not invoiced</p>
-                  </>
-                )}
-              </div>
-            ))}
+            {monthlyOrderValues.map(({ monthKey, total, asoCount, missedTotal, missedAsos, isCurrentMonth }) => {
+              const allInvoiced = missedAsos === 0;
+              const borderColor = allInvoiced ? "border-l-emerald-500" : isCurrentMonth ? "border-l-amber-500" : "border-l-red-500";
+              const missedLabel = isCurrentMonth ? "Outstanding" : "Missed";
+              const missedValueColor = isCurrentMonth ? "text-amber-600" : "text-red-600";
+              const missedCountColor = isCurrentMonth ? "text-amber-500" : "text-red-500";
+              return (
+                <div key={monthKey} className={`rounded-lg border border-gray-200 border-l-[3px] ${borderColor} bg-white p-3`}>
+                  <p className="text-[11px] font-semibold text-gray-400">{monthKey}</p>
+                  <p className="mt-1 text-xl font-bold text-gray-900">R {Math.round(total).toLocaleString("en-ZA")}</p>
+                  <p className="mt-0.5 text-xs text-gray-500">{asoCount} ASO{asoCount !== 1 ? "s" : ""} total</p>
+                  <div className="my-2 border-t border-gray-100" />
+                  {allInvoiced ? (
+                    <p className="text-xs font-semibold text-emerald-600">{isCurrentMonth ? "All invoiced" : "Fully invoiced"}</p>
+                  ) : (
+                    <>
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">{missedLabel}</p>
+                      <p className={`mt-0.5 text-sm font-bold ${missedValueColor}`}>R {Math.round(missedTotal).toLocaleString("en-ZA")}</p>
+                      <p className={`text-xs ${missedCountColor}`}>{missedAsos} ASO{missedAsos !== 1 ? "s" : ""} not invoiced</p>
+                    </>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
