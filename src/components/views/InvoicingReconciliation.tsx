@@ -1074,6 +1074,24 @@ export const InvoicingReconciliation: React.FC<InvoicingReconciliationProps> = (
     return orderJobs;
   }, [activeMonth, activeWeek, jobs, viewMode]);
 
+  // Monthly order value totals — grouped by sourceCreatedDate month (not invoice date)
+  const monthlyOrderValues = useMemo(() => {
+    const orderJobs = jobs.filter((job) => job.jobType === "order" || job.jobType === undefined);
+    const byMonth = new Map<string, { total: number; orderCount: number }>();
+    orderJobs.forEach((job) => {
+      if (!job.totalExclVat) return;
+      const monthKey = getMonthKey(getOrderSourceDate(job));
+      if (!monthKey) return;
+      const existing = byMonth.get(monthKey) || { total: 0, orderCount: 0 };
+      existing.total += job.totalExclVat;
+      existing.orderCount += 1;
+      byMonth.set(monthKey, existing);
+    });
+    return Array.from(byMonth.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([monthKey, data]) => ({ monthKey, ...data }));
+  }, [jobs]);
+
   const creatorWorkload = useMemo<CreatorWorkload[]>(() => {
     const statusByAso = new Map(reconciliationRows.map((row) => [row.aso, row.status]));
     const byCreator = new Map<string, { orderRows: number; orderQty: number; invoiceRows: number; asos: Set<string>; invoices: Set<string>; matchedAsos: Set<string>; months: Set<string> }>();
@@ -2059,6 +2077,21 @@ export const InvoicingReconciliation: React.FC<InvoicingReconciliationProps> = (
           );
         })}
       </div>
+
+      {monthlyOrderValues.length > 0 && (
+        <div>
+          <p className="mb-2 text-sm font-semibold text-gray-700">Order Value by Month — Excl. VAT</p>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+            {monthlyOrderValues.map(({ monthKey, total, orderCount }) => (
+              <div key={monthKey} className="rounded-lg border border-gray-200 border-l-[3px] border-l-violet-500 bg-white p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{monthKey}</p>
+                <p className="mt-1 text-lg font-bold text-gray-900">R {total.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                <p className="mt-1 text-xs text-gray-400">{orderCount} line{orderCount !== 1 ? "s" : ""}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <Card className="overflow-hidden">
         <CardContent className="p-4">

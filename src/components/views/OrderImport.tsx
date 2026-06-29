@@ -34,6 +34,7 @@ interface ImportedOrder {
   outstandingQty?: number;  // Outstanding quantity from Excel
   sourceCreatedDate?: string;
   sourceCreatedBy?: string;
+  totalExclVat?: number;     // Total excl. VAT from sales order import
   eta?: string;  // normalized string (e.g., "2025-10-10")
   notes?: string;
 }
@@ -166,6 +167,20 @@ const parsePallets = (v?: string | number): number | undefined => {
   return Number.isFinite(n) ? Math.round(n) : undefined;
 };
 
+const parseCurrency = (v?: string | number): number | undefined => {
+  if (v === undefined || v === null || v === "") return undefined;
+  if (typeof v === "number") return v;
+  // Strip currency symbols, spaces, then handle decimal comma
+  const stripped = String(v).replace(/[R$£€\s]/g, "");
+  const commaParts = stripped.split(",");
+  const cleaned =
+    commaParts.length === 2 && commaParts[1].length <= 2
+      ? stripped.replace(",", ".")
+      : stripped.replace(/,/g, "");
+  const n = parseFloat(cleaned);
+  return Number.isFinite(n) ? n : undefined;
+};
+
 type HeaderIndex = Record<string, number>;
 const indexHeaders = (headers: string[]): HeaderIndex => {
   const map: HeaderIndex = {};
@@ -206,6 +221,7 @@ const ALIASES: Record<keyof Omit<ImportedOrder, never>, string[]> = {
   outstandingQty: ["outstanding qty", "outstanding", "outstanding quantity", "qty outstanding", "balance qty", "balance"],
   sourceCreatedDate: ["datecreated (day-month-year)", "datecreated", "date created", "created date", "created on"],
   sourceCreatedBy: ["createdbyuserid", "created by user id", "created by userid", "created by", "creator", "user"],
+  totalExclVat: ["total excl vat", "total excl. vat", "total excl vat (r)", "net value", "net amount", "excl vat", "excl. vat", "amount excl", "amount excl vat", "value excl vat"],
   eta: ["eta", "delivery date", "required date", "promise date", "due date"],
   notes: ["notes", "remarks", "comment", "inventory description", "description"],
 };
@@ -242,6 +258,7 @@ const rowToOrder = (headers: string[], row: any[], i: number): ImportedOrder | n
   const outstandingQtyIdx = findFirst(idx, ALIASES.outstandingQty);
   const sourceCreatedDateIdx = findFirst(idx, ALIASES.sourceCreatedDate);
   const sourceCreatedByIdx = findFirst(idx, ALIASES.sourceCreatedBy);
+  const totalExclVatIdx = findFirst(idx, ALIASES.totalExclVat);
   const etaIdx = findFirst(idx, ALIASES.eta);
   const notesIdx = findFirst(idx, ALIASES.notes);
 
@@ -290,6 +307,7 @@ const rowToOrder = (headers: string[], row: any[], i: number): ImportedOrder | n
   const outstandingQty = parsePallets(safeStr(coalesce(row, outstandingQtyIdx)));
   const sourceCreatedDate = normalizeEta(coalesce(row, sourceCreatedDateIdx));
   const sourceCreatedBy = safeStr(coalesce(row, sourceCreatedByIdx));
+  const totalExclVat = parseCurrency(coalesce(row, totalExclVatIdx));
 
   if (!ref || !customer) return null;
 
@@ -311,6 +329,7 @@ const rowToOrder = (headers: string[], row: any[], i: number): ImportedOrder | n
     outstandingQty,
     sourceCreatedDate: safe(sourceCreatedDate),
     sourceCreatedBy: safe(sourceCreatedBy),
+    totalExclVat,
     eta: safe(eta),
     notes: safe(notes),
   };
@@ -513,6 +532,7 @@ export const OrderImport: React.FC = () => {
         outstandingQty: order.outstandingQty,
         sourceCreatedDate: order.sourceCreatedDate,
         sourceCreatedBy: order.sourceCreatedBy,
+        totalExclVat: order.totalExclVat,
         eta: order.eta,
         notes: order.notes,
       }));
@@ -600,6 +620,7 @@ export const OrderImport: React.FC = () => {
       "Outstanding Qty",
       "DateCreated (Day-Month-Year)",
       "CreatedByUserid",
+      "Total Excl VAT",
     ];
 
     if (format === "csv") {
@@ -614,6 +635,7 @@ export const OrderImport: React.FC = () => {
         "120",
         "2025-10-01",
         "USER001",
+        "50000",
       ];
       const csv = [headers.join(","), example.join(",")].join("\n");
       const blob = new Blob([csv], { type: "text/csv" });
@@ -626,7 +648,7 @@ export const OrderImport: React.FC = () => {
     } else {
       const data = [
         headers,
-        ["SO-0001", "Sample Customer", "Normal", "2025-10-10", "ITEM-001", "Sample Line — fragile", "K58 Warehouse", "120", "2025-10-01", "USER001"],
+        ["SO-0001", "Sample Customer", "Normal", "2025-10-10", "ITEM-001", "Sample Line — fragile", "K58 Warehouse", "120", "2025-10-01", "USER001", "50000"],
       ];
       const worksheet = XLSX.utils.aoa_to_sheet(data);
       const workbook = XLSX.utils.book_new();
@@ -789,6 +811,7 @@ export const OrderImport: React.FC = () => {
                     <th className="px-3 py-2 text-right font-semibold text-gray-700">Qty</th>
                     <th className="px-3 py-2 text-left font-semibold text-gray-700">Date Created</th>
                     <th className="px-3 py-2 text-left font-semibold text-gray-700">Created By</th>
+                    <th className="px-3 py-2 text-right font-semibold text-gray-700">Total Excl VAT</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -804,6 +827,7 @@ export const OrderImport: React.FC = () => {
                       <td className="px-3 py-2 text-right text-gray-700">{order.outstandingQty != null ? String(order.outstandingQty) : "—"}</td>
                       <td className="px-3 py-2 text-gray-500">{String(order.sourceCreatedDate ?? "—")}</td>
                       <td className="px-3 py-2 text-gray-500">{String(order.sourceCreatedBy ?? "—")}</td>
+                      <td className="px-3 py-2 text-right text-gray-700">{order.totalExclVat != null ? `R ${order.totalExclVat.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}</td>
                     </tr>
                   ))}
                 </tbody>

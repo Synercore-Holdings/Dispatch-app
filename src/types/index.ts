@@ -87,6 +87,7 @@ export interface Job {
   outstandingQty?: number;  // Outstanding quantity from Excel import
   sourceCreatedDate?: string; // Source-system DateCreated from sales order import
   sourceCreatedBy?: string;   // Source-system CreatedByUserid from sales order import
+  totalExclVat?: number;      // Total excl. VAT from sales order import
 
   // Workflow tracking
   transporterBooked?: boolean;  // Transporter has been booked

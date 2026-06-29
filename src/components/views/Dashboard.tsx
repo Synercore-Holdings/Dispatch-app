@@ -10,6 +10,7 @@ import {
   TrendingUp,
   Minus,
   Bell,
+  Banknote,
 } from "lucide-react";
 import { GlobalSearch } from "../GlobalSearch";
 import { JobDetailsModal } from "../JobDetailsModal";
@@ -111,6 +112,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onOpenAlerts, onNavigate }
   const orderJobs = useMemo(() => {
     return jobs.filter((j) => j.jobType === "order" || j.jobType === undefined);
   }, [jobs]);
+
+  const totalOrderExclVat = useMemo(() => {
+    return orderJobs.reduce((sum, j) => sum + (j.totalExclVat ?? 0), 0);
+  }, [orderJobs]);
 
   // Stats - count unique order refs (ASO numbers), not individual line items
   const stats = useMemo(() => {
@@ -430,6 +435,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ onOpenAlerts, onNavigate }
       changeType: africaExportStats.total > 0 ? "up" as const : "neutral" as const,
       sublabel: africaExportStats.open > 0 ? `${africaExportStats.open} Open` : "No Open Exports",
       borderColor: "border-l-emerald-500", iconBg: "bg-emerald-50", iconColor: "text-emerald-500", nav: "africa-exports", tab: undefined,
+    },
+    {
+      icon: Banknote,
+      value: totalOrderExclVat > 0 ? `R ${totalOrderExclVat.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "R 0",
+      label: "TOTAL EXCL VAT",
+      change: "Order value imported",
+      changeType: "neutral" as const,
+      sublabel: totalOrderExclVat > 0 ? "From imported orders" : "No value data",
+      borderColor: "border-l-violet-500", iconBg: "bg-violet-50", iconColor: "text-violet-500", nav: "home", tab: undefined,
     },
   ];
 
