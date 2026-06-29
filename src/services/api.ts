@@ -379,6 +379,13 @@ export const invoiceReconciliationAPI = {
       body: JSON.stringify({ reason }),
     });
   },
+
+  undoLastUpload: async (): Promise<{ filename: string; deletedLines: number; revertedJobs: number }> => {
+    return fetchAPI<{ filename: string; deletedLines: number; revertedJobs: number }>(
+      "/api/invoice-reconciliation?action=undo-last-upload",
+      { method: "POST", body: JSON.stringify({}) }
+    );
+  },
 };
 
 // ============ Flowbin Batches ============

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Copy, Download, FileText, PackageCheck, Search, ShieldCheck, Upload, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Copy, Download, FileText, PackageCheck, RotateCcw, Search, ShieldCheck, Upload, XCircle } from "lucide-react";
 import * as XLSX from "../../lib/spreadsheet";
 import { useAuth } from "../../context/AuthContext";
 import { useDispatch } from "../../context/DispatchContext";
@@ -725,7 +725,7 @@ interface InvoicingReconciliationProps {
 }
 
 export const InvoicingReconciliation: React.FC<InvoicingReconciliationProps> = ({ onNavigate }) => {
-  const { jobs, addJob } = useDispatch();
+  const { jobs, addJob, refreshData } = useDispatch();
   const { showSuccess, showError, showWarning, confirm } = useNotification();
   const { isAdmin, user } = useAuth();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -744,6 +744,7 @@ export const InvoicingReconciliation: React.FC<InvoicingReconciliationProps> = (
   const [activeStatus, setActiveStatus] = useState<InvoiceStatus | "all">("all");
   const [lateInvoiceFilter, setLateInvoiceFilter] = useState<LateInvoiceFilter>("not-reviewed");
   const [isImporting, setIsImporting] = useState(false);
+  const [isUndoing, setIsUndoing] = useState(false);
   const [isConfirmingNotLoaded, setIsConfirmingNotLoaded] = useState(false);
   const [isLoadingLedger, setIsLoadingLedger] = useState(true);
   const [remoteSyncError, setRemoteSyncError] = useState("");
@@ -1548,6 +1549,39 @@ export const InvoicingReconciliation: React.FC<InvoicingReconciliationProps> = (
     }
   };
 
+  const undoLastUpload = async () => {
+    const latest = uploadHistory[0];
+    if (!latest) return;
+    const proceed = await confirm({
+      title: "Undo Last Upload",
+      message: `Remove ${formatNumber(latest.rowsAdded)} invoice rows from "${latest.filename}"? Orders auto-delivered by this upload will be reset to pending.`,
+      confirmText: "Undo Upload",
+      cancelText: "Cancel",
+    });
+    if (!proceed) return;
+
+    setIsUndoing(true);
+    try {
+      const result = await invoiceReconciliationAPI.undoLastUpload();
+      const remote = await invoiceReconciliationAPI.getAll();
+      setInvoiceLines(remote.lines);
+      saveInvoiceLines(remote.lines);
+      const nextMeta = remote.uploadMeta || null;
+      setUploadMeta(nextMeta);
+      saveUploadMeta(nextMeta);
+      setUploadHistory((remote.uploads || []).filter(Boolean) as InvoiceUploadMeta[]);
+      setAuditHistory(remote.audits || []);
+      await refreshData();
+      const revertMsg = result.revertedJobs > 0 ? ` and reverted ${result.revertedJobs} order${result.revertedJobs === 1 ? "" : "s"} to pending` : "";
+      showSuccess(`Undone: removed ${result.deletedLines} invoice rows${revertMsg}.`);
+    } catch (undoError) {
+      console.error("Failed to undo upload:", undoError);
+      showError("Failed to undo last upload. Please try again.");
+    } finally {
+      setIsUndoing(false);
+    }
+  };
+
   const resetInvoiceLedger = async () => {
     const proceed = await confirm({
       title: "Reset Invoice Ledger",
@@ -1973,6 +2007,15 @@ export const InvoicingReconciliation: React.FC<InvoicingReconciliationProps> = (
           <Button variant="outline" className="gap-2" onClick={exportExceptions} disabled={reconciliationRows.length === 0 && lateInvoiceReviews.length === 0}>
             <Download className="h-4 w-4" />
             Export Exceptions
+          </Button>
+          <Button
+            variant="outline"
+            className="gap-2 border-amber-200 text-amber-700 hover:bg-amber-50"
+            onClick={() => void undoLastUpload()}
+            disabled={isUndoing || uploadHistory.length === 0}
+          >
+            <RotateCcw className="h-4 w-4" />
+            {isUndoing ? "Undoing..." : "Undo Last Upload"}
           </Button>
           {isAdmin && (
             <Button variant="outline" className="gap-2 border-red-200 text-red-700 hover:bg-red-50" onClick={() => void resetInvoiceLedger()} disabled={invoiceLines.length === 0}>

@@ -334,6 +334,81 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
+    if (action === "undo-last-upload") {
+      try {
+        const latestUpload = await prisma.invoiceReconciliationUpload.findFirst({
+          orderBy: { uploadedAt: "desc" },
+        });
+        if (!latestUpload) {
+          return res.status(404).json({ success: false, error: "No uploads to undo" });
+        }
+
+        const rowsToDelete = Number(latestUpload.rowsAdded) || 0;
+        let deletedCount = 0;
+        let affectedAsos: string[] = [];
+
+        if (rowsToDelete > 0) {
+          const recentLines = await prisma.invoiceReconciliationLine.findMany({
+            orderBy: { createdAt: "desc" },
+            take: rowsToDelete,
+            select: { id: true, aso: true },
+          });
+          const idsToDelete = recentLines.map((l) => l.id);
+          affectedAsos = [...new Set(recentLines.map((l) => l.aso))];
+
+          await prisma.invoiceReconciliationLine.deleteMany({
+            where: { id: { in: idsToDelete } },
+          });
+          deletedCount = idsToDelete.length;
+        }
+
+        let revertedJobs = 0;
+        if (affectedAsos.length > 0) {
+          const remaining = await prisma.invoiceReconciliationLine.findMany({
+            where: { aso: { in: affectedAsos } },
+            select: { aso: true },
+          });
+          const asosWithLines = new Set(remaining.map((l) => l.aso));
+          const asosToRevert = affectedAsos.filter((aso) => !asosWithLines.has(aso));
+
+          if (asosToRevert.length > 0) {
+            const reverted = await prisma.job.updateMany({
+              where: { ref: { in: asosToRevert }, status: "delivered" },
+              data: { status: "pending", actualDeliveryAt: null },
+            });
+            revertedJobs = reverted.count;
+          }
+        }
+
+        await prisma.invoiceReconciliationUpload.delete({
+          where: { id: latestUpload.id },
+        });
+
+        await prisma.invoiceReconciliationAudit.create({
+          data: {
+            entityType: "invoice-ledger",
+            entityKey: String(latestUpload.id),
+            action: "Upload undone",
+            fromValue: String(latestUpload.filename),
+            toValue: `${deletedCount} lines deleted, ${revertedJobs} jobs reverted to pending`,
+            userId: user.id,
+          },
+        });
+
+        return res.json({
+          success: true,
+          data: {
+            filename: latestUpload.filename,
+            deletedLines: deletedCount,
+            revertedJobs,
+          },
+        });
+      } catch (error) {
+        console.error("Error undoing invoice upload:", error);
+        return res.status(500).json({ success: false, error: "Failed to undo last upload" });
+      }
+    }
+
     return res.status(400).json({ success: false, error: "Unsupported action" });
   }
 
