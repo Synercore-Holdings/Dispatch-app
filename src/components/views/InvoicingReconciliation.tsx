@@ -1076,17 +1076,37 @@ export const InvoicingReconciliation: React.FC<InvoicingReconciliationProps> = (
 
   const monthlyOrderValues = useMemo(() => {
     const orderJobs = jobs.filter((job) => job.jobType === "order" || job.jobType === undefined);
-    const byMonth = new Map<string, { total: number; outstanding: number; orderCount: number; outstandingCount: number }>();
+    const now = new Date();
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+
+    const byMonth = new Map<string, { total: number; missed: number; orderCount: number; missedCount: number; isPast: boolean }>();
     orderJobs.forEach((job) => {
       if (!job.totalExclVat) return;
       const month = getMonthKey(normalizeDate(job.eta || job.sourceCreatedDate || job.createdAt));
       if (!month) return;
-      const existing = byMonth.get(month) || { total: 0, outstanding: 0, orderCount: 0, outstandingCount: 0 };
+      const existing = byMonth.get(month) || { total: 0, missed: 0, orderCount: 0, missedCount: 0, isPast: month < currentMonth };
       existing.total += job.totalExclVat;
       existing.orderCount += 1;
-      if (job.status !== "delivered" && job.status !== "cancelled") {
-        existing.outstanding += job.totalExclVat;
-        existing.outstandingCount += 1;
+
+      if (job.status !== "cancelled") {
+        if (month < currentMonth) {
+          // Past month: missed = not delivered within that month
+          const endOfMonth = new Date(`${month}-01T00:00:00`);
+          endOfMonth.setMonth(endOfMonth.getMonth() + 1);
+          endOfMonth.setDate(0);
+          endOfMonth.setHours(23, 59, 59, 999);
+          const deliveredOnTime = job.actualDeliveryAt && new Date(job.actualDeliveryAt) <= endOfMonth;
+          if (!deliveredOnTime) {
+            existing.missed += job.totalExclVat;
+            existing.missedCount += 1;
+          }
+        } else {
+          // Current or future month: outstanding = not yet delivered
+          if (job.status !== "delivered") {
+            existing.missed += job.totalExclVat;
+            existing.missedCount += 1;
+          }
+        }
       }
       byMonth.set(month, existing);
     });
@@ -2089,21 +2109,24 @@ export const InvoicingReconciliation: React.FC<InvoicingReconciliationProps> = (
           </CardHeader>
           <CardContent className="p-4">
             <div className="flex flex-wrap gap-3">
-              {monthlyOrderValues.map(({ month, total, outstanding, orderCount, outstandingCount }) => {
-                const fullyReconciled = outstanding === 0;
+              {monthlyOrderValues.map(({ month, total, missed, orderCount, missedCount, isPast }) => {
+                const allClear = missed === 0;
+                const missedLabel = isPast ? "Missed" : "Outstanding";
+                const accentColor = allClear ? "border-l-emerald-500" : isPast ? "border-l-red-500" : "border-l-violet-500";
+                const missedColor = isPast ? "text-red-600" : "text-amber-600";
                 return (
-                  <div key={month} className={`min-w-[190px] rounded-lg border border-gray-200 border-l-[3px] ${fullyReconciled ? "border-l-emerald-500" : "border-l-violet-500"} bg-white px-4 py-3`}>
+                  <div key={month} className={`min-w-[190px] rounded-lg border border-gray-200 border-l-[3px] ${accentColor} bg-white px-4 py-3`}>
                     <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{month}</p>
                     <p className="mt-1 text-lg font-bold text-gray-900">R {formatNumber(Math.round(total))}</p>
                     <p className="text-[10px] text-gray-400 mt-0.5">{formatNumber(orderCount)} order line{orderCount === 1 ? "" : "s"} total</p>
-                    <div className={`mt-2 pt-2 border-t border-gray-100`}>
-                      {fullyReconciled ? (
-                        <p className="text-[11px] font-semibold text-emerald-600">All invoiced</p>
+                    <div className="mt-2 pt-2 border-t border-gray-100">
+                      {allClear ? (
+                        <p className="text-[11px] font-semibold text-emerald-600">{isPast ? "Fully invoiced" : "All invoiced"}</p>
                       ) : (
                         <>
-                          <p className="text-[10px] text-gray-400">Outstanding</p>
-                          <p className="text-sm font-bold text-amber-600">R {formatNumber(Math.round(outstanding))}</p>
-                          <p className="text-[10px] text-gray-400">{formatNumber(outstandingCount)} line{outstandingCount === 1 ? "" : "s"} not invoiced</p>
+                          <p className="text-[10px] text-gray-400">{missedLabel}</p>
+                          <p className={`text-sm font-bold ${missedColor}`}>R {formatNumber(Math.round(missed))}</p>
+                          <p className="text-[10px] text-gray-400">{formatNumber(missedCount)} line{missedCount === 1 ? "" : "s"} not invoiced</p>
                         </>
                       )}
                     </div>
