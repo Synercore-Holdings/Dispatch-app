@@ -1107,16 +1107,17 @@ export const InvoicingReconciliation: React.FC<InvoicingReconciliationProps> = (
     });
 
     // Group ASOs by ETA month
-    const byMonth = new Map<string, { total: number; asoCount: number; missedTotal: number; missedAsos: number; isCurrentMonth: boolean }>();
+    type MonthData = { total: number; asoCount: number; missedTotal: number; missedAsos: number; monthState: "past" | "current" | "future" };
+    const byMonth = new Map<string, MonthData>();
     byAso.forEach(({ totalExclVat, etaMonth }, aso) => {
       const isInvoiced = invoicedByAso.has(aso);
-      const isCurrentMonth = etaMonth === currentMonthKey;
-      const existing = byMonth.get(etaMonth) || { total: 0, asoCount: 0, missedTotal: 0, missedAsos: 0, isCurrentMonth };
+      const monthState: "past" | "current" | "future" =
+        etaMonth < currentMonthKey ? "past" : etaMonth === currentMonthKey ? "current" : "future";
+      const existing = byMonth.get(etaMonth) || { total: 0, asoCount: 0, missedTotal: 0, missedAsos: 0, monthState };
       existing.total += totalExclVat;
       existing.asoCount += 1;
-      // Current month: outstanding (not yet invoiced, still dynamic)
-      // Past months: missed (not invoiced — permanently locked in as missed for that month)
-      if (!isInvoiced) {
+      // Past: missed = permanently not invoiced; Current: outstanding = not yet invoiced; Future: upcoming (no missed label)
+      if (!isInvoiced && monthState !== "future") {
         existing.missedTotal += totalExclVat;
         existing.missedAsos += 1;
       }
@@ -2163,25 +2164,32 @@ export const InvoicingReconciliation: React.FC<InvoicingReconciliationProps> = (
           <p className="mb-1 text-sm font-semibold text-gray-700">Order Value by Month — Excl. VAT</p>
           <p className="mb-3 text-xs text-blue-600">K58 warehouse orders only, grouped by delivery due date (ETA). Shows total order value expected per month and what was missed.</p>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-            {monthlyOrderValues.map(({ monthKey, total, asoCount, missedTotal, missedAsos, isCurrentMonth }) => {
+            {monthlyOrderValues.map(({ monthKey, total, asoCount, missedTotal, missedAsos, monthState }) => {
               const allInvoiced = missedAsos === 0;
-              const borderColor = allInvoiced ? "border-l-emerald-500" : isCurrentMonth ? "border-l-amber-500" : "border-l-red-500";
-              const missedLabel = isCurrentMonth ? "Outstanding" : "Missed";
-              const missedValueColor = isCurrentMonth ? "text-amber-600" : "text-red-600";
-              const missedCountColor = isCurrentMonth ? "text-amber-500" : "text-red-500";
+              const isFuture = monthState === "future";
+              const isCurrent = monthState === "current";
+              const borderColor = isFuture
+                ? "border-l-violet-400"
+                : allInvoiced
+                  ? "border-l-emerald-500"
+                  : isCurrent
+                    ? "border-l-amber-500"
+                    : "border-l-red-500";
               return (
                 <div key={monthKey} className={`rounded-lg border border-gray-200 border-l-[3px] ${borderColor} bg-white p-3`}>
                   <p className="text-[11px] font-semibold text-gray-400">{monthKey}</p>
                   <p className="mt-1 text-xl font-bold text-gray-900">R {Math.round(total).toLocaleString("en-ZA")}</p>
                   <p className="mt-0.5 text-xs text-gray-500">{asoCount} ASO{asoCount !== 1 ? "s" : ""} total</p>
                   <div className="my-2 border-t border-gray-100" />
-                  {allInvoiced ? (
-                    <p className="text-xs font-semibold text-emerald-600">{isCurrentMonth ? "All invoiced" : "Fully invoiced"}</p>
+                  {isFuture ? (
+                    <p className="text-xs font-semibold text-violet-500">Upcoming</p>
+                  ) : allInvoiced ? (
+                    <p className="text-xs font-semibold text-emerald-600">{isCurrent ? "All invoiced" : "Fully invoiced"}</p>
                   ) : (
                     <>
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">{missedLabel}</p>
-                      <p className={`mt-0.5 text-sm font-bold ${missedValueColor}`}>R {Math.round(missedTotal).toLocaleString("en-ZA")}</p>
-                      <p className={`text-xs ${missedCountColor}`}>{missedAsos} ASO{missedAsos !== 1 ? "s" : ""} not invoiced</p>
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">{isCurrent ? "Outstanding" : "Missed"}</p>
+                      <p className={`mt-0.5 text-sm font-bold ${isCurrent ? "text-amber-600" : "text-red-600"}`}>R {Math.round(missedTotal).toLocaleString("en-ZA")}</p>
+                      <p className={`text-xs ${isCurrent ? "text-amber-500" : "text-red-500"}`}>{missedAsos} ASO{missedAsos !== 1 ? "s" : ""} not invoiced</p>
                     </>
                   )}
                 </div>
