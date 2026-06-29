@@ -1076,14 +1076,18 @@ export const InvoicingReconciliation: React.FC<InvoicingReconciliationProps> = (
 
   const monthlyOrderValues = useMemo(() => {
     const orderJobs = jobs.filter((job) => job.jobType === "order" || job.jobType === undefined);
-    const byMonth = new Map<string, { totalExclVat: number; orderCount: number }>();
+    const byMonth = new Map<string, { total: number; outstanding: number; orderCount: number; outstandingCount: number }>();
     orderJobs.forEach((job) => {
       if (!job.totalExclVat) return;
       const month = getMonthKey(normalizeDate(job.eta || job.sourceCreatedDate || job.createdAt));
       if (!month) return;
-      const existing = byMonth.get(month) || { totalExclVat: 0, orderCount: 0 };
-      existing.totalExclVat += job.totalExclVat;
+      const existing = byMonth.get(month) || { total: 0, outstanding: 0, orderCount: 0, outstandingCount: 0 };
+      existing.total += job.totalExclVat;
       existing.orderCount += 1;
+      if (job.status !== "delivered" && job.status !== "cancelled") {
+        existing.outstanding += job.totalExclVat;
+        existing.outstandingCount += 1;
+      }
       byMonth.set(month, existing);
     });
     return Array.from(byMonth.entries())
@@ -2085,13 +2089,27 @@ export const InvoicingReconciliation: React.FC<InvoicingReconciliationProps> = (
           </CardHeader>
           <CardContent className="p-4">
             <div className="flex flex-wrap gap-3">
-              {monthlyOrderValues.map(({ month, totalExclVat, orderCount }) => (
-                <div key={month} className="min-w-[160px] rounded-lg border border-gray-200 border-l-[3px] border-l-violet-500 bg-white px-4 py-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{month}</p>
-                  <p className="mt-1 text-xl font-bold text-gray-900">R {formatNumber(Math.round(totalExclVat))}</p>
-                  <p className="mt-0.5 text-[11px] text-gray-500">{formatNumber(orderCount)} order line{orderCount === 1 ? "" : "s"}</p>
-                </div>
-              ))}
+              {monthlyOrderValues.map(({ month, total, outstanding, orderCount, outstandingCount }) => {
+                const fullyReconciled = outstanding === 0;
+                return (
+                  <div key={month} className={`min-w-[190px] rounded-lg border border-gray-200 border-l-[3px] ${fullyReconciled ? "border-l-emerald-500" : "border-l-violet-500"} bg-white px-4 py-3`}>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{month}</p>
+                    <p className="mt-1 text-lg font-bold text-gray-900">R {formatNumber(Math.round(total))}</p>
+                    <p className="text-[10px] text-gray-400 mt-0.5">{formatNumber(orderCount)} order line{orderCount === 1 ? "" : "s"} total</p>
+                    <div className={`mt-2 pt-2 border-t border-gray-100`}>
+                      {fullyReconciled ? (
+                        <p className="text-[11px] font-semibold text-emerald-600">All invoiced</p>
+                      ) : (
+                        <>
+                          <p className="text-[10px] text-gray-400">Outstanding</p>
+                          <p className="text-sm font-bold text-amber-600">R {formatNumber(Math.round(outstanding))}</p>
+                          <p className="text-[10px] text-gray-400">{formatNumber(outstandingCount)} line{outstandingCount === 1 ? "" : "s"} not invoiced</p>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </CardContent>
         </Card>
