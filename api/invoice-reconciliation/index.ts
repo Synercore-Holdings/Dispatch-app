@@ -196,6 +196,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           }
         }
         const asos = Array.from(asoMap.keys());
+        const autoDeliveredRefs: string[] = [];
         if (asos.length > 0) {
           const matchingJobs = await prisma.job.findMany({
             where: { ref: { in: asos } },
@@ -217,10 +218,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 });
               }),
             );
+            autoDeliveredRefs.push(...matchingJobs.map((j) => j.ref));
           }
         }
 
-        return res.status(201).json({ success: true, data: result.map(formatLine) });
+        return res.status(201).json({
+          success: true,
+          data: {
+            lines: result.map(formatLine),
+            autoDelivered: { count: autoDeliveredRefs.length, refs: autoDeliveredRefs },
+          },
+        });
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "Failed to save invoice reconciliation rows";
         if (message.includes("required") || message.includes("too long")) {

@@ -429,11 +429,14 @@ const saveInvoiceLines = (lines: InvoiceLine[]) => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(lines));
 };
 
-const saveInvoiceLinesRemote = async (lines: InvoiceLine[]) => {
+const saveInvoiceLinesRemote = async (lines: InvoiceLine[]): Promise<{ count: number; refs: string[] }> => {
   const chunkSize = 500;
+  const allRefs = new Set<string>();
   for (let i = 0; i < lines.length; i += chunkSize) {
-    await invoiceReconciliationAPI.bulkUpsertLines(lines.slice(i, i + chunkSize));
+    const result = await invoiceReconciliationAPI.bulkUpsertLines(lines.slice(i, i + chunkSize));
+    result.autoDelivered?.refs.forEach((ref) => allRefs.add(ref));
   }
+  return { count: allRefs.size, refs: Array.from(allRefs) };
 };
 
 const statusLabel: Record<InvoiceStatus, string> = {
@@ -742,6 +745,7 @@ export const InvoicingReconciliation: React.FC<InvoicingReconciliationProps> = (
   const [uploadHistory, setUploadHistory] = useState<InvoiceUploadMeta[]>([]);
   const [auditHistory, setAuditHistory] = useState<ReconciliationAudit[]>([]);
   const [pendingInvoiceUpload, setPendingInvoiceUpload] = useState<PendingInvoiceUpload | null>(null);
+  const [autoDeliveredReport, setAutoDeliveredReport] = useState<{ count: number; orders: { ref: string; customer: string }[] } | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeStatus, setActiveStatus] = useState<InvoiceStatus | "all">("all");
   const [lateInvoiceFilter, setLateInvoiceFilter] = useState<LateInvoiceFilter>("not-reviewed");
@@ -1520,7 +1524,8 @@ export const InvoicingReconciliation: React.FC<InvoicingReconciliationProps> = (
       saveUploadMeta(nextUploadMeta);
       if (merged.added > 0) {
         try {
-          await saveInvoiceLinesRemote(merged.lines);
+          const uploadedLines = pendingInvoiceUpload.lines;
+          const autoDelivered = await saveInvoiceLinesRemote(merged.lines);
           const savedUpload = await invoiceReconciliationAPI.recordUpload(nextUploadMeta);
           if (savedUpload) {
             setUploadMeta(savedUpload);
@@ -1528,7 +1533,15 @@ export const InvoicingReconciliation: React.FC<InvoicingReconciliationProps> = (
             setUploadHistory((history) => [savedUpload, ...history].slice(0, 25));
           }
           setRemoteSyncError("");
-          showSuccess(`Added ${merged.added} new invoice row${merged.added === 1 ? "" : "s"} to the database. ${merged.skipped} already existed.`);
+          const deliveredMsg = autoDelivered.count > 0 ? ` ${autoDelivered.count} order${autoDelivered.count === 1 ? "" : "s"} auto-marked as delivered.` : "";
+          showSuccess(`Added ${merged.added} new invoice row${merged.added === 1 ? "" : "s"}.${deliveredMsg}`);
+          if (autoDelivered.count > 0) {
+            const orders = autoDelivered.refs.map((ref) => {
+              const line = uploadedLines.find((l) => l.aso === ref);
+              return { ref, customer: line?.customer || "" };
+            });
+            setAutoDeliveredReport({ count: autoDelivered.count, orders });
+          }
         } catch (syncError) {
           console.warn("Failed to sync invoice ledger", syncError);
           setRemoteSyncError("Database sync failed. Changes are saved in this browser and will retry on the next upload.");
@@ -2885,6 +2898,47 @@ export const InvoicingReconciliation: React.FC<InvoicingReconciliationProps> = (
                 <Button onClick={() => void commitInvoiceUpload()} disabled={isImporting}>
                   {isImporting ? "Saving..." : "Save to Ledger"}
                 </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {autoDeliveredReport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setAutoDeliveredReport(null)}>
+          <Card className="w-full max-w-lg overflow-hidden" onClick={(event) => event.stopPropagation()}>
+            <CardHeader className="border-b border-gray-100 p-5">
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-green-100">
+                  <CheckCircle2 className="h-5 w-5 text-green-600" />
+                </div>
+                <div>
+                  <CardTitle>{autoDeliveredReport.count} Order{autoDeliveredReport.count === 1 ? "" : "s"} Auto-Delivered</CardTitle>
+                  <p className="mt-0.5 text-sm text-gray-500">These orders were matched to uploaded invoices and marked as delivered.</p>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="max-h-80 overflow-y-auto">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-gray-50">
+                    <tr className="border-b border-gray-200">
+                      <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">ASO</th>
+                      <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Customer</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {autoDeliveredReport.orders.map((order) => (
+                      <tr key={order.ref} className="border-b border-gray-100 hover:bg-gray-50">
+                        <td className="px-4 py-2.5 font-mono font-semibold text-gray-900">{order.ref}</td>
+                        <td className="px-4 py-2.5 text-gray-600">{order.customer || "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex justify-end border-t border-gray-100 p-4">
+                <Button onClick={() => setAutoDeliveredReport(null)}>Close</Button>
               </div>
             </CardContent>
           </Card>
