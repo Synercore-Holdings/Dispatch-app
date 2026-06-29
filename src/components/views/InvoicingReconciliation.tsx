@@ -1543,7 +1543,7 @@ export const InvoicingReconciliation: React.FC<InvoicingReconciliationProps> = (
       }
       if (remote.uploads) setUploadHistory(remote.uploads.filter(Boolean) as InvoiceUploadMeta[]);
       // Refresh job statuses so reverted orders reappear as pending
-      await refreshData(true);
+      await refreshData();
       showSuccess(`Removed ${result.linesRemoved} invoice lines${result.ordersReverted > 0 ? ` and reverted ${result.ordersReverted} order${result.ordersReverted !== 1 ? "s" : ""} to pending` : ""}.`);
     } catch (error) {
       console.error("Failed to undo last upload:", error);
