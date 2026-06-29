@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Copy, Download, FileText, PackageCheck, Search, ShieldCheck, Upload, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Copy, Download, FileText, PackageCheck, RotateCcw, Search, ShieldCheck, Upload, XCircle } from "lucide-react";
 import * as XLSX from "../../lib/spreadsheet";
 import { useAuth } from "../../context/AuthContext";
 import { useDispatch } from "../../context/DispatchContext";
@@ -724,7 +724,7 @@ interface InvoicingReconciliationProps {
 }
 
 export const InvoicingReconciliation: React.FC<InvoicingReconciliationProps> = ({ onNavigate }) => {
-  const { jobs, addJob } = useDispatch();
+  const { jobs, addJob, refreshData } = useDispatch();
   const { showSuccess, showError, showWarning, confirm } = useNotification();
   const { isAdmin, user } = useAuth();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -743,6 +743,7 @@ export const InvoicingReconciliation: React.FC<InvoicingReconciliationProps> = (
   const [activeStatus, setActiveStatus] = useState<InvoiceStatus | "all">("all");
   const [lateInvoiceFilter, setLateInvoiceFilter] = useState<LateInvoiceFilter>("not-reviewed");
   const [isImporting, setIsImporting] = useState(false);
+  const [isUndoing, setIsUndoing] = useState(false);
   const [isConfirmingNotLoaded, setIsConfirmingNotLoaded] = useState(false);
   const [isLoadingLedger, setIsLoadingLedger] = useState(true);
   const [remoteSyncError, setRemoteSyncError] = useState("");
@@ -1517,6 +1518,41 @@ export const InvoicingReconciliation: React.FC<InvoicingReconciliationProps> = (
     }
   };
 
+  const undoLastUpload = async () => {
+    if (!uploadMeta) return;
+    const proceed = await confirm({
+      title: "Undo Last Upload",
+      message: `Remove the ${uploadMeta.rowsAdded} rows added by "${uploadMeta.filename}"? Any orders auto-delivered by that upload will be reverted to pending.`,
+      type: "danger",
+      confirmText: "Undo Upload",
+    });
+    if (!proceed) return;
+    setIsUndoing(true);
+    try {
+      const result = await invoiceReconciliationAPI.undoLastUpload();
+      // Reload reconciliation data from the server
+      const remote = await invoiceReconciliationAPI.getAll();
+      setInvoiceLines(remote.lines);
+      saveInvoiceLines(remote.lines);
+      if (remote.uploadMeta) {
+        setUploadMeta(remote.uploadMeta);
+        saveUploadMeta(remote.uploadMeta);
+      } else {
+        setUploadMeta(null);
+        saveUploadMeta(null);
+      }
+      if (remote.uploads) setUploadHistory(remote.uploads.filter(Boolean) as InvoiceUploadMeta[]);
+      // Refresh job statuses so reverted orders reappear as pending
+      await refreshData(true);
+      showSuccess(`Removed ${result.linesRemoved} invoice lines${result.ordersReverted > 0 ? ` and reverted ${result.ordersReverted} order${result.ordersReverted !== 1 ? "s" : ""} to pending` : ""}.`);
+    } catch (error) {
+      console.error("Failed to undo last upload:", error);
+      showError("Failed to undo last upload. Please try again.");
+    } finally {
+      setIsUndoing(false);
+    }
+  };
+
   const resetInvoiceLedger = async () => {
     const proceed = await confirm({
       title: "Reset Invoice Ledger",
@@ -1943,6 +1979,12 @@ export const InvoicingReconciliation: React.FC<InvoicingReconciliationProps> = (
             <Download className="h-4 w-4" />
             Export Exceptions
           </Button>
+          {uploadMeta && (
+            <Button variant="outline" className="gap-2 border-amber-200 text-amber-700 hover:bg-amber-50" onClick={() => void undoLastUpload()} disabled={isUndoing || isImporting}>
+              <RotateCcw className="h-4 w-4" />
+              {isUndoing ? "Undoing..." : "Undo Last Upload"}
+            </Button>
+          )}
           {isAdmin && (
             <Button variant="outline" className="gap-2 border-red-200 text-red-700 hover:bg-red-50" onClick={() => void resetInvoiceLedger()} disabled={invoiceLines.length === 0}>
               <XCircle className="h-4 w-4" />

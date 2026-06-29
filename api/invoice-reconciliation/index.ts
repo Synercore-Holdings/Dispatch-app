@@ -293,6 +293,66 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
+    if (action === "undo-last-upload") {
+      try {
+        const latestUpload = await prisma.invoiceReconciliationUpload.findFirst({
+          orderBy: { uploadedAt: "desc" },
+        });
+        if (!latestUpload) {
+          return res.status(404).json({ success: false, error: "No upload history found" });
+        }
+
+        const rowsToDelete = latestUpload.rowsAdded as number;
+
+        // Find the N most recently created invoice lines
+        const linesToDelete = await prisma.invoiceReconciliationLine.findMany({
+          orderBy: { createdAt: "desc" },
+          take: rowsToDelete,
+          select: { id: true, aso: true },
+        });
+        const lineIds = linesToDelete.map((l) => l.id);
+        const deletedAsos = new Set(linesToDelete.map((l) => l.aso));
+
+        // After deletion, which ASOs will have zero remaining lines?
+        const remainingLines = await prisma.invoiceReconciliationLine.findMany({
+          where: { aso: { in: Array.from(deletedAsos) }, id: { notIn: lineIds } },
+          select: { aso: true },
+        });
+        const remainingAsos = new Set(remainingLines.map((l) => l.aso));
+        const asosToClear = Array.from(deletedAsos).filter((aso) => !remainingAsos.has(aso));
+
+        // Revert auto-delivered jobs for cleared ASOs back to pending
+        let revertedCount = 0;
+        if (asosToClear.length > 0) {
+          const reverted = await prisma.job.updateMany({
+            where: { ref: { in: asosToClear }, status: "delivered", actualDeliveryAt: { not: null } },
+            data: { status: "pending", actualDeliveryAt: null },
+          });
+          revertedCount = reverted.count;
+        }
+
+        await prisma.$transaction([
+          prisma.invoiceReconciliationLine.deleteMany({ where: { id: { in: lineIds } } }),
+          prisma.invoiceReconciliationUpload.delete({ where: { id: latestUpload.id } }),
+          prisma.invoiceReconciliationAudit.create({
+            data: {
+              entityType: "invoice-upload",
+              entityKey: String(latestUpload.id),
+              action: "Upload undone",
+              fromValue: latestUpload.filename as string,
+              toValue: `${lineIds.length} lines removed, ${revertedCount} orders reverted`,
+              userId: user.id,
+            },
+          }),
+        ]);
+
+        return res.json({ success: true, data: { linesRemoved: lineIds.length, ordersReverted: revertedCount } });
+      } catch (error) {
+        console.error("Error undoing last invoice upload:", error);
+        return res.status(500).json({ success: false, error: "Failed to undo last upload" });
+      }
+    }
+
     return res.status(400).json({ success: false, error: "Unsupported action" });
   }
 
