@@ -9,6 +9,7 @@ import { Button } from "../ui/Button";
 import { formatNumber, formatPercent } from "../../utils/format";
 import { makeNewJob, type Job, type ServiceType } from "../../types";
 import { invoiceReconciliationAPI, type InvoiceReconciliationTimingNoteMeta } from "../../services/api";
+import { isPtaWarehouse } from "../../config/site";
 
 type InvoiceStatus = "matched" | "not-invoiced" | "not-loaded" | "loaded-not-delivered" | "qty-mismatch";
 type ReviewStatus = "open" | "needs-order-load" | "needs-dispatch-review" | "needs-finance-review" | "historical-invoice" | "not-dispatch-related" | "resolved" | "ignored";
@@ -1075,7 +1076,7 @@ export const InvoicingReconciliation: React.FC<InvoicingReconciliationProps> = (
   }, [activeMonth, activeWeek, jobs, viewMode]);
 
   const monthlyOrderValues = useMemo(() => {
-    const orderJobs = jobs.filter((job) => job.jobType === "order" || job.jobType === undefined);
+    const orderJobs = jobs.filter((job) => (job.jobType === "order" || job.jobType === undefined) && isPtaWarehouse(job.warehouse ?? ""));
     const now = new Date();
     const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
@@ -2105,7 +2106,7 @@ export const InvoicingReconciliation: React.FC<InvoicingReconciliationProps> = (
         <Card className="overflow-hidden">
           <CardHeader className="border-b border-gray-100 px-5 py-4">
             <CardTitle className="text-base">Order Value by Month — Excl. VAT</CardTitle>
-            <p className="text-xs text-gray-500">Grouped by delivery due date (ETA). Shows the total order value expected per month — including orders not yet invoiced.</p>
+            <p className="text-xs text-gray-500">PTA warehouse orders only, grouped by delivery due date (ETA). Shows total order value expected per month and what was missed.</p>
           </CardHeader>
           <CardContent className="p-4">
             <div className="flex flex-wrap gap-3">
