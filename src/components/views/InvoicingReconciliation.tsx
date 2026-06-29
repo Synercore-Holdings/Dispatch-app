@@ -1551,7 +1551,10 @@ export const InvoicingReconciliation: React.FC<InvoicingReconciliationProps> = (
 
   const undoLastUpload = async () => {
     const latest = uploadHistory[0];
-    if (!latest) return;
+    if (!latest) {
+      showWarning("No upload history found. Nothing to undo.");
+      return;
+    }
     const proceed = await confirm({
       title: "Undo Last Upload",
       message: `Remove ${formatNumber(latest.rowsAdded)} invoice rows from "${latest.filename}"? Orders auto-delivered by this upload will be reset to pending.`,
@@ -2012,7 +2015,7 @@ export const InvoicingReconciliation: React.FC<InvoicingReconciliationProps> = (
             variant="outline"
             className="gap-2 border-amber-200 text-amber-700 hover:bg-amber-50"
             onClick={() => void undoLastUpload()}
-            disabled={isUndoing || uploadHistory.length === 0}
+            disabled={isUndoing}
           >
             <RotateCcw className="h-4 w-4" />
             {isUndoing ? "Undoing..." : "Undo Last Upload"}
