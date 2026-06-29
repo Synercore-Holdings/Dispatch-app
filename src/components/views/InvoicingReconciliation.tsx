@@ -1080,14 +1080,14 @@ export const InvoicingReconciliation: React.FC<InvoicingReconciliationProps> = (
     const now = new Date();
     const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
-    const byMonth = new Map<string, { total: number; missed: number; orderCount: number; missedCount: number; isPast: boolean }>();
+    const byMonth = new Map<string, { total: number; missed: number; asoRefs: Set<string>; missedAsos: Set<string>; isPast: boolean }>();
     orderJobs.forEach((job) => {
       if (!job.totalExclVat) return;
       const month = getMonthKey(normalizeDate(job.eta || job.sourceCreatedDate || job.createdAt));
       if (!month) return;
-      const existing = byMonth.get(month) || { total: 0, missed: 0, orderCount: 0, missedCount: 0, isPast: month < currentMonth };
+      const existing = byMonth.get(month) || { total: 0, missed: 0, asoRefs: new Set(), missedAsos: new Set(), isPast: month < currentMonth };
       existing.total += job.totalExclVat;
-      existing.orderCount += 1;
+      existing.asoRefs.add(job.ref);
 
       if (job.status !== "cancelled") {
         if (month < currentMonth) {
@@ -1099,20 +1099,27 @@ export const InvoicingReconciliation: React.FC<InvoicingReconciliationProps> = (
           const deliveredOnTime = job.actualDeliveryAt && new Date(job.actualDeliveryAt) <= endOfMonth;
           if (!deliveredOnTime) {
             existing.missed += job.totalExclVat;
-            existing.missedCount += 1;
+            existing.missedAsos.add(job.ref);
           }
         } else {
           // Current or future month: outstanding = not yet delivered
           if (job.status !== "delivered") {
             existing.missed += job.totalExclVat;
-            existing.missedCount += 1;
+            existing.missedAsos.add(job.ref);
           }
         }
       }
       byMonth.set(month, existing);
     });
     return Array.from(byMonth.entries())
-      .map(([month, data]) => ({ month, ...data }))
+      .map(([month, data]) => ({
+        month,
+        total: data.total,
+        missed: data.missed,
+        orderCount: data.asoRefs.size,
+        missedCount: data.missedAsos.size,
+        isPast: data.isPast,
+      }))
       .sort((a, b) => b.month.localeCompare(a.month));
   }, [jobs]);
 
@@ -2119,7 +2126,7 @@ export const InvoicingReconciliation: React.FC<InvoicingReconciliationProps> = (
                   <div key={month} className={`min-w-[190px] rounded-lg border border-gray-200 border-l-[3px] ${accentColor} bg-white px-4 py-3`}>
                     <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{month}</p>
                     <p className="mt-1 text-lg font-bold text-gray-900">R {formatNumber(Math.round(total))}</p>
-                    <p className="text-[10px] text-gray-400 mt-0.5">{formatNumber(orderCount)} order line{orderCount === 1 ? "" : "s"} total</p>
+                    <p className="text-[10px] text-gray-400 mt-0.5">{formatNumber(orderCount)} ASO{orderCount === 1 ? "" : "s"} total</p>
                     <div className="mt-2 pt-2 border-t border-gray-100">
                       {allClear ? (
                         <p className="text-[11px] font-semibold text-emerald-600">{isPast ? "Fully invoiced" : "All invoiced"}</p>
@@ -2127,7 +2134,7 @@ export const InvoicingReconciliation: React.FC<InvoicingReconciliationProps> = (
                         <>
                           <p className="text-[10px] text-gray-400">{missedLabel}</p>
                           <p className={`text-sm font-bold ${missedColor}`}>R {formatNumber(Math.round(missed))}</p>
-                          <p className="text-[10px] text-gray-400">{formatNumber(missedCount)} line{missedCount === 1 ? "" : "s"} not invoiced</p>
+                          <p className="text-[10px] text-gray-400">{formatNumber(missedCount)} ASO{missedCount === 1 ? "" : "s"} not invoiced</p>
                         </>
                       )}
                     </div>
