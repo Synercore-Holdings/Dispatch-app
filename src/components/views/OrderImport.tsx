@@ -624,20 +624,11 @@ export const OrderImport: React.FC = () => {
     ];
 
     if (format === "csv") {
-      const example = [
-        "SO-0001",
-        "Sample Customer",
-        "Normal",
-        "2025-10-10",
-        "ITEM-001",
-        "Sample Line — fragile",
-        "K58 Warehouse",
-        "120",
-        "2025-10-01",
-        "USER001",
-        "50000",
+      const examples = [
+        ["SO-0001", "Sample Customer", "Normal", "2025-10-10", "ITEM-001", "Sample Line — fragile", "Finished Goods AFi K58", "120", "2025-10-01", "USER001", "50000"],
+        ["SO-0002", "Sample Customer 2", "Normal", "2025-10-11", "ITEM-002", "Sample Line — raw material", "Raw - AFi Klapmuts K58", "60", "2025-10-01", "USER001", "25000"],
       ];
-      const csv = [headers.join(","), example.join(",")].join("\n");
+      const csv = [headers.join(","), ...examples.map((r) => r.join(","))].join("\n");
       const blob = new Blob([csv], { type: "text/csv" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -648,7 +639,8 @@ export const OrderImport: React.FC = () => {
     } else {
       const data = [
         headers,
-        ["SO-0001", "Sample Customer", "Normal", "2025-10-10", "ITEM-001", "Sample Line — fragile", "K58 Warehouse", "120", "2025-10-01", "USER001", "50000"],
+        ["SO-0001", "Sample Customer", "Normal", "2025-10-10", "ITEM-001", "Sample Line — fragile", "Finished Goods AFi K58", "120", "2025-10-01", "USER001", "50000"],
+        ["SO-0002", "Sample Customer 2", "Normal", "2025-10-11", "ITEM-002", "Sample Line — raw material", "Raw - AFi Klapmuts K58", "60", "2025-10-01", "USER001", "25000"],
       ];
       const worksheet = XLSX.utils.aoa_to_sheet(data);
       const workbook = XLSX.utils.book_new();
@@ -742,15 +734,16 @@ export const OrderImport: React.FC = () => {
           </button>
         </div>
         {showFormatTips && (
-          <div className="mt-2 rounded-lg bg-blue-50 border border-blue-100 p-3 text-xs text-blue-800">
+          <div className="mt-2 rounded-lg bg-blue-50 border border-blue-100 p-3 text-xs text-blue-800 space-y-2">
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-1">
               <span><strong>Document No</strong> → Reference</span>
               <span><strong>Customer Name</strong> → Customer</span>
-              <span><strong>Warehouse</strong> → Pickup</span>
+              <span><strong>Warehouse</strong> → Pickup (K58 only)</span>
               <span><strong>Delivery Date</strong> → ETA</span>
               <span><strong>Inventory Description</strong> → Line Item</span>
               <span><strong>Status</strong> → Priority</span>
             </div>
+            <p className="text-blue-700">Valid K58 warehouses: <strong>Finished Goods AFi K58</strong>, <strong>Raw - AFi Klapmuts K58</strong>. Rows from Pretoria warehouses are automatically skipped.</p>
           </div>
         )}
       </Card>
