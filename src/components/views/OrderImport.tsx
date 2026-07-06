@@ -236,10 +236,9 @@ const ALIASES: Record<keyof Omit<ImportedOrder, never>, string[]> = {
   priority: ["priority", "urgency", "rush", "status", "order status"],
   pallets: ["pallets", "pallet qty", "pallet quantity"],
   outstandingQty: ["outstanding qty", "outstanding", "outstanding quantity", "qty outstanding", "balance qty", "balance"],
-  totalExclVat: ["total excl vat", "total excl. vat", "excl vat", "excl. vat", "net value", "excl vat total", "total excl tax", "net amount", "value excl vat", "total value excl vat"],
+  totalExclVat: ["total excl vat", "total excl. vat", "total excl vat (r)", "net value", "net amount", "excl vat", "excl. vat", "amount excl", "amount excl vat", "value excl vat", "excl vat total", "total excl tax", "total value excl vat"],
   sourceCreatedDate: ["datecreated (day-month-year)", "datecreated", "date created", "created date", "created on"],
   sourceCreatedBy: ["createdbyuserid", "created by user id", "created by userid", "created by", "creator", "user"],
-  totalExclVat: ["total excl vat", "total excl. vat", "total excl vat (r)", "net value", "net amount", "excl vat", "excl. vat", "amount excl", "amount excl vat", "value excl vat"],
   eta: ["eta", "delivery date", "required date", "promise date", "due date"],
   notes: ["notes", "remarks", "comment", "inventory description", "description"],
 };
@@ -259,7 +258,6 @@ const rowToOrder = (headers: string[], row: any[], i: number): ImportedOrder | n
   const totalExclVatIdx = findFirst(idx, ALIASES.totalExclVat);
   const sourceCreatedDateIdx = findFirst(idx, ALIASES.sourceCreatedDate);
   const sourceCreatedByIdx = findFirst(idx, ALIASES.sourceCreatedBy);
-  const totalExclVatIdx = findFirst(idx, ALIASES.totalExclVat);
   const etaIdx = findFirst(idx, ALIASES.eta);
   const notesIdx = findFirst(idx, ALIASES.notes);
 
@@ -533,7 +531,6 @@ export const OrderImport: React.FC = () => {
         totalExclVat: order.totalExclVat,
         sourceCreatedDate: order.sourceCreatedDate,
         sourceCreatedBy: order.sourceCreatedBy,
-        totalExclVat: order.totalExclVat,
         eta: order.eta,
         notes: order.notes,
       }));
@@ -630,7 +627,6 @@ export const OrderImport: React.FC = () => {
       "Total Excl VAT",
       "DateCreated (Day-Month-Year)",
       "CreatedByUserid",
-      "Total Excl VAT",
     ];
 
     if (format === "csv") {
