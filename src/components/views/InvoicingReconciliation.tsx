@@ -429,14 +429,14 @@ const saveInvoiceLines = (lines: InvoiceLine[]) => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(lines));
 };
 
-const saveInvoiceLinesRemote = async (lines: InvoiceLine[]): Promise<{ count: number; refs: string[] }> => {
+const saveInvoiceLinesRemote = async (lines: InvoiceLine[]): Promise<{ ref: string; customer: string }[]> => {
   const chunkSize = 500;
-  const allRefs = new Set<string>();
+  const autoDelivered: { ref: string; customer: string }[] = [];
   for (let i = 0; i < lines.length; i += chunkSize) {
     const result = await invoiceReconciliationAPI.bulkUpsertLines(lines.slice(i, i + chunkSize));
-    result.autoDelivered?.refs.forEach((ref) => allRefs.add(ref));
+    if (result.autoDelivered?.length) autoDelivered.push(...result.autoDelivered);
   }
-  return { count: allRefs.size, refs: Array.from(allRefs) };
+  return autoDelivered;
 };
 
 const statusLabel: Record<InvoiceStatus, string> = {
@@ -745,7 +745,7 @@ export const InvoicingReconciliation: React.FC<InvoicingReconciliationProps> = (
   const [uploadHistory, setUploadHistory] = useState<InvoiceUploadMeta[]>([]);
   const [auditHistory, setAuditHistory] = useState<ReconciliationAudit[]>([]);
   const [pendingInvoiceUpload, setPendingInvoiceUpload] = useState<PendingInvoiceUpload | null>(null);
-  const [autoDeliveredReport, setAutoDeliveredReport] = useState<{ count: number; orders: { ref: string; customer: string }[] } | null>(null);
+  const [autoDeliveredReport, setAutoDeliveredReport] = useState<{ ref: string; customer: string }[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeStatus, setActiveStatus] = useState<InvoiceStatus | "all">("all");
   const [lateInvoiceFilter, setLateInvoiceFilter] = useState<LateInvoiceFilter>("not-reviewed");
@@ -1082,54 +1082,55 @@ export const InvoicingReconciliation: React.FC<InvoicingReconciliationProps> = (
     return orderJobs;
   }, [activeMonth, activeWeek, jobs, viewMode]);
 
+  // Monthly order value totals — grouped by sourceCreatedDate month (not invoice date)
+  // Monthly order value cards — grouped by ETA month, one entry per unique ASO
   const monthlyOrderValues = useMemo(() => {
-    const orderJobs = jobs.filter((job) => (job.jobType === "order" || job.jobType === undefined) && isPtaWarehouse(job.warehouse ?? ""));
     const now = new Date();
-    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
-    const byMonth = new Map<string, { total: number; missed: number; asoRefs: Set<string>; missedAsos: Set<string>; isPast: boolean; isFuture: boolean }>();
+    // K58 orders only — exclude any PTA/Pretoria warehouse rows that may exist historically
+    const orderJobs = jobs.filter((job) =>
+      (job.jobType === "order" || job.jobType === undefined) &&
+      !(job.warehouse && job.warehouse.toLowerCase().includes("pretoria"))
+    );
+
+    // Aggregate per unique ASO first (sum totalExclVat across line items for the same ref)
+    const byAso = new Map<string, { totalExclVat: number; etaMonth: string }>();
     orderJobs.forEach((job) => {
       if (!job.totalExclVat) return;
-      const month = getMonthKey(normalizeDate(job.eta || job.sourceCreatedDate || job.createdAt));
-      if (!month) return;
-      const existing = byMonth.get(month) || { total: 0, missed: 0, asoRefs: new Set(), missedAsos: new Set(), isPast: month < currentMonth, isFuture: month > currentMonth };
-      existing.total += job.totalExclVat;
-      existing.asoRefs.add(job.ref);
-
-      if (job.status !== "cancelled" && !existing.isFuture) {
-        if (month < currentMonth) {
-          // Past month: missed = not delivered within that month
-          const endOfMonth = new Date(`${month}-01T00:00:00`);
-          endOfMonth.setMonth(endOfMonth.getMonth() + 1);
-          endOfMonth.setDate(0);
-          endOfMonth.setHours(23, 59, 59, 999);
-          const deliveredOnTime = job.actualDeliveryAt && new Date(job.actualDeliveryAt) <= endOfMonth;
-          if (!deliveredOnTime) {
-            existing.missed += job.totalExclVat;
-            existing.missedAsos.add(job.ref);
-          }
-        } else {
-          // Current month: outstanding = not yet delivered
-          if (job.status !== "delivered") {
-            existing.missed += job.totalExclVat;
-            existing.missedAsos.add(job.ref);
-          }
-        }
+      const etaMonth = getMonthKey(normalizeDate(job.eta || ""));
+      if (!etaMonth) return;
+      const aso = normalizeAso(job.ref);
+      const existing = byAso.get(aso);
+      if (existing) {
+        existing.totalExclVat += job.totalExclVat;
+      } else {
+        byAso.set(aso, { totalExclVat: job.totalExclVat, etaMonth });
       }
-      byMonth.set(month, existing);
     });
+
+    // Group ASOs by ETA month
+    type MonthData = { total: number; asoCount: number; missedTotal: number; missedAsos: number; monthState: "past" | "current" | "future" };
+    const byMonth = new Map<string, MonthData>();
+    byAso.forEach(({ totalExclVat, etaMonth }, aso) => {
+      const isInvoiced = invoicedByAso.has(aso);
+      const monthState: "past" | "current" | "future" =
+        etaMonth < currentMonthKey ? "past" : etaMonth === currentMonthKey ? "current" : "future";
+      const existing = byMonth.get(etaMonth) || { total: 0, asoCount: 0, missedTotal: 0, missedAsos: 0, monthState };
+      existing.total += totalExclVat;
+      existing.asoCount += 1;
+      // Past: missed = permanently not invoiced; Current: outstanding = not yet invoiced; Future: upcoming (no missed label)
+      if (!isInvoiced && monthState !== "future") {
+        existing.missedTotal += totalExclVat;
+        existing.missedAsos += 1;
+      }
+      byMonth.set(etaMonth, existing);
+    });
+
     return Array.from(byMonth.entries())
-      .map(([month, data]) => ({
-        month,
-        total: data.total,
-        missed: data.missed,
-        orderCount: data.asoRefs.size,
-        missedCount: data.missedAsos.size,
-        isPast: data.isPast,
-        isFuture: data.isFuture,
-      }))
-      .sort((a, b) => b.month.localeCompare(a.month));
-  }, [jobs]);
+      .sort(([a], [b]) => b.localeCompare(a))
+      .map(([monthKey, data]) => ({ monthKey, ...data }));
+  }, [jobs, invoicedByAso]);
 
   const creatorWorkload = useMemo<CreatorWorkload[]>(() => {
     const statusByAso = new Map(reconciliationRows.map((row) => [row.aso, row.status]));
@@ -1525,7 +1526,6 @@ export const InvoicingReconciliation: React.FC<InvoicingReconciliationProps> = (
       saveUploadMeta(nextUploadMeta);
       if (merged.added > 0) {
         try {
-          const uploadedLines = pendingInvoiceUpload.lines;
           const autoDelivered = await saveInvoiceLinesRemote(merged.lines);
           const savedUpload = await invoiceReconciliationAPI.recordUpload(nextUploadMeta);
           if (savedUpload) {
@@ -1534,15 +1534,10 @@ export const InvoicingReconciliation: React.FC<InvoicingReconciliationProps> = (
             setUploadHistory((history) => [savedUpload, ...history].slice(0, 25));
           }
           setRemoteSyncError("");
-          const deliveredMsg = autoDelivered.count > 0 ? ` ${autoDelivered.count} order${autoDelivered.count === 1 ? "" : "s"} auto-marked as delivered.` : "";
-          showSuccess(`Added ${merged.added} new invoice row${merged.added === 1 ? "" : "s"}.${deliveredMsg}`);
-          if (autoDelivered.count > 0) {
-            const orders = autoDelivered.refs.map((ref) => {
-              const line = uploadedLines.find((l) => l.aso === ref);
-              return { ref, customer: line?.customer || "" };
-            });
-            setAutoDeliveredReport({ count: autoDelivered.count, orders });
-          }
+          const deliveryNote = autoDelivered.length > 0 ? ` ${autoDelivered.length} order${autoDelivered.length === 1 ? "" : "s"} auto-marked as delivered.` : "";
+          showSuccess(`Added ${merged.added} new invoice row${merged.added === 1 ? "" : "s"} to the database. ${merged.skipped} already existed.${deliveryNote}`);
+          if (autoDelivered.length > 0) setAutoDeliveredReport(autoDelivered);
+          await refreshData();
         } catch (syncError) {
           console.warn("Failed to sync invoice ledger", syncError);
           setRemoteSyncError("Database sync failed. Changes are saved in this browser and will retry on the next upload.");
@@ -1571,35 +1566,34 @@ export const InvoicingReconciliation: React.FC<InvoicingReconciliationProps> = (
   };
 
   const undoLastUpload = async () => {
-    const latest = uploadHistory[0];
-    if (!latest) {
-      showWarning("No upload history found. Nothing to undo.");
-      return;
-    }
+    if (!uploadMeta) return;
     const proceed = await confirm({
       title: "Undo Last Upload",
-      message: `Remove ${formatNumber(latest.rowsAdded)} invoice rows from "${latest.filename}"? Orders auto-delivered by this upload will be reset to pending.`,
+      message: `Remove the ${uploadMeta.rowsAdded} rows added by "${uploadMeta.filename}"? Any orders auto-delivered by that upload will be reverted to pending.`,
+      type: "danger",
       confirmText: "Undo Upload",
-      cancelText: "Cancel",
     });
     if (!proceed) return;
-
     setIsUndoing(true);
     try {
       const result = await invoiceReconciliationAPI.undoLastUpload();
+      // Reload reconciliation data from the server
       const remote = await invoiceReconciliationAPI.getAll();
       setInvoiceLines(remote.lines);
       saveInvoiceLines(remote.lines);
-      const nextMeta = remote.uploadMeta || null;
-      setUploadMeta(nextMeta);
-      saveUploadMeta(nextMeta);
-      setUploadHistory((remote.uploads || []).filter(Boolean) as InvoiceUploadMeta[]);
-      setAuditHistory(remote.audits || []);
+      if (remote.uploadMeta) {
+        setUploadMeta(remote.uploadMeta);
+        saveUploadMeta(remote.uploadMeta);
+      } else {
+        setUploadMeta(null);
+        saveUploadMeta(null);
+      }
+      if (remote.uploads) setUploadHistory(remote.uploads.filter(Boolean) as InvoiceUploadMeta[]);
+      // Refresh job statuses so reverted orders reappear as pending
       await refreshData();
-      const revertMsg = result.revertedJobs > 0 ? ` and reverted ${result.revertedJobs} order${result.revertedJobs === 1 ? "" : "s"} to pending` : "";
-      showSuccess(`Undone: removed ${result.deletedLines} invoice rows${revertMsg}.`);
-    } catch (undoError) {
-      console.error("Failed to undo upload:", undoError);
+      showSuccess(`Removed ${result.linesRemoved} invoice lines${result.ordersReverted > 0 ? ` and reverted ${result.ordersReverted} order${result.ordersReverted !== 1 ? "s" : ""} to pending` : ""}.`);
+    } catch (error) {
+      console.error("Failed to undo last upload:", error);
       showError("Failed to undo last upload. Please try again.");
     } finally {
       setIsUndoing(false);
@@ -2032,15 +2026,12 @@ export const InvoicingReconciliation: React.FC<InvoicingReconciliationProps> = (
             <Download className="h-4 w-4" />
             Export Exceptions
           </Button>
-          <Button
-            variant="outline"
-            className="gap-2 border-amber-200 text-amber-700 hover:bg-amber-50"
-            onClick={() => void undoLastUpload()}
-            disabled={isUndoing}
-          >
-            <RotateCcw className="h-4 w-4" />
-            {isUndoing ? "Undoing..." : "Undo Last Upload"}
-          </Button>
+          {uploadMeta && (
+            <Button variant="outline" className="gap-2 border-amber-200 text-amber-700 hover:bg-amber-50" onClick={() => void undoLastUpload()} disabled={isUndoing || isImporting}>
+              <RotateCcw className="h-4 w-4" />
+              {isUndoing ? "Undoing..." : "Undo Last Upload"}
+            </Button>
+          )}
           {isAdmin && (
             <Button variant="outline" className="gap-2 border-red-200 text-red-700 hover:bg-red-50" onClick={() => void resetInvoiceLedger()} disabled={invoiceLines.length === 0}>
               <XCircle className="h-4 w-4" />
@@ -2177,46 +2168,43 @@ export const InvoicingReconciliation: React.FC<InvoicingReconciliationProps> = (
       </div>
 
       {monthlyOrderValues.length > 0 && (
-        <Card className="overflow-hidden">
-          <CardHeader className="border-b border-gray-100 px-5 py-4">
-            <CardTitle className="text-base">Order Value by Month — Excl. VAT</CardTitle>
-            <p className="text-xs text-gray-500">PTA warehouse orders only, grouped by delivery due date (ETA). Shows total order value expected per month and what was missed.</p>
-          </CardHeader>
-          <CardContent className="p-4">
-            <div className="flex flex-wrap gap-3">
-              {monthlyOrderValues.map(({ month, total, missed, orderCount, missedCount, isPast, isFuture }) => {
-                const allClear = missed === 0;
-                const accentColor = isFuture
-                  ? "border-l-violet-400"
-                  : allClear
-                    ? "border-l-emerald-500"
-                    : isPast
-                      ? "border-l-red-500"
-                      : "border-l-amber-500";
-                return (
-                  <div key={month} className={`min-w-[190px] rounded-lg border border-gray-200 border-l-[3px] ${accentColor} bg-white px-4 py-3`}>
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{month}</p>
-                    <p className="mt-1 text-lg font-bold text-gray-900">R {formatNumber(Math.round(total))}</p>
-                    <p className="text-[10px] text-gray-400 mt-0.5">{formatNumber(orderCount)} ASO{orderCount === 1 ? "" : "s"} total</p>
-                    <div className="mt-2 pt-2 border-t border-gray-100">
-                      {isFuture ? (
-                        <p className="text-[11px] font-semibold text-violet-500">Upcoming</p>
-                      ) : allClear ? (
-                        <p className="text-[11px] font-semibold text-emerald-600">{isPast ? "Fully invoiced" : "All invoiced"}</p>
-                      ) : (
-                        <>
-                          <p className="text-[10px] text-gray-400">{isPast ? "Missed" : "Outstanding"}</p>
-                          <p className={`text-sm font-bold ${isPast ? "text-red-600" : "text-amber-600"}`}>R {formatNumber(Math.round(missed))}</p>
-                          <p className="text-[10px] text-gray-400">{formatNumber(missedCount)} ASO{missedCount === 1 ? "" : "s"} not invoiced</p>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
+        <div>
+          <p className="mb-1 text-sm font-semibold text-gray-700">Order Value by Month — Excl. VAT</p>
+          <p className="mb-3 text-xs text-blue-600">K58 warehouse orders only, grouped by delivery due date (ETA). Shows total order value expected per month and what was missed.</p>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+            {monthlyOrderValues.map(({ monthKey, total, asoCount, missedTotal, missedAsos, monthState }) => {
+              const allInvoiced = missedAsos === 0;
+              const isFuture = monthState === "future";
+              const isCurrent = monthState === "current";
+              const borderColor = isFuture
+                ? "border-l-violet-400"
+                : allInvoiced
+                  ? "border-l-emerald-500"
+                  : isCurrent
+                    ? "border-l-amber-500"
+                    : "border-l-red-500";
+              return (
+                <div key={monthKey} className={`rounded-lg border border-gray-200 border-l-[3px] ${borderColor} bg-white p-3`}>
+                  <p className="text-[11px] font-semibold text-gray-400">{monthKey}</p>
+                  <p className="mt-1 text-xl font-bold text-gray-900">R {Math.round(total).toLocaleString("en-ZA")}</p>
+                  <p className="mt-0.5 text-xs text-gray-500">{asoCount} ASO{asoCount !== 1 ? "s" : ""} total</p>
+                  <div className="my-2 border-t border-gray-100" />
+                  {isFuture ? (
+                    <p className="text-xs font-semibold text-violet-500">Upcoming</p>
+                  ) : allInvoiced ? (
+                    <p className="text-xs font-semibold text-emerald-600">{isCurrent ? "All invoiced" : "Fully invoiced"}</p>
+                  ) : (
+                    <>
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">{isCurrent ? "Outstanding" : "Missed"}</p>
+                      <p className={`mt-0.5 text-sm font-bold ${isCurrent ? "text-amber-600" : "text-red-600"}`}>R {Math.round(missedTotal).toLocaleString("en-ZA")}</p>
+                      <p className={`text-xs ${isCurrent ? "text-amber-500" : "text-red-500"}`}>{missedAsos} ASO{missedAsos !== 1 ? "s" : ""} not invoiced</p>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
       )}
 
       <Card className="overflow-hidden">
@@ -2911,41 +2899,44 @@ export const InvoicingReconciliation: React.FC<InvoicingReconciliationProps> = (
         </div>
       )}
 
-      {autoDeliveredReport && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setAutoDeliveredReport(null)}>
-          <Card className="w-full max-w-lg overflow-hidden" onClick={(event) => event.stopPropagation()}>
+      {autoDeliveredReport.length > 0 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setAutoDeliveredReport([])}>
+          <Card className="w-full max-w-lg overflow-hidden" onClick={(e) => e.stopPropagation()}>
             <CardHeader className="border-b border-gray-100 p-5">
-              <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-green-100">
-                  <CheckCircle2 className="h-5 w-5 text-green-600" />
-                </div>
+              <div className="flex items-start justify-between gap-4">
                 <div>
-                  <CardTitle>{autoDeliveredReport.count} Order{autoDeliveredReport.count === 1 ? "" : "s"} Auto-Delivered</CardTitle>
-                  <p className="mt-0.5 text-sm text-gray-500">These orders were matched to uploaded invoices and marked as delivered.</p>
+                  <CardTitle className="flex items-center gap-2">
+                    <PackageCheck className="h-5 w-5 text-emerald-600" />
+                    Auto-Delivered Orders
+                  </CardTitle>
+                  <p className="mt-1 text-sm text-gray-600">
+                    {autoDeliveredReport.length} order{autoDeliveredReport.length === 1 ? " was" : "s were"} automatically marked as delivered based on this invoice upload.
+                  </p>
                 </div>
+                <button type="button" onClick={() => setAutoDeliveredReport([])} className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600">✕</button>
               </div>
             </CardHeader>
             <CardContent className="p-0">
               <div className="max-h-80 overflow-y-auto">
                 <table className="w-full text-sm">
                   <thead className="sticky top-0 bg-gray-50">
-                    <tr className="border-b border-gray-200">
-                      <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">ASO</th>
-                      <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Customer</th>
+                    <tr>
+                      <th className="px-4 py-2 text-left font-semibold text-gray-600">ASO / Order Ref</th>
+                      <th className="px-4 py-2 text-left font-semibold text-gray-600">Customer</th>
                     </tr>
                   </thead>
-                  <tbody>
-                    {autoDeliveredReport.orders.map((order) => (
-                      <tr key={order.ref} className="border-b border-gray-100 hover:bg-gray-50">
-                        <td className="px-4 py-2.5 font-mono font-semibold text-gray-900">{order.ref}</td>
-                        <td className="px-4 py-2.5 text-gray-600">{order.customer || "—"}</td>
+                  <tbody className="divide-y divide-gray-100">
+                    {autoDeliveredReport.map((row) => (
+                      <tr key={row.ref} className="hover:bg-gray-50">
+                        <td className="px-4 py-2 font-medium text-gray-900">{row.ref}</td>
+                        <td className="px-4 py-2 text-gray-600">{row.customer}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-              <div className="flex justify-end border-t border-gray-100 p-4">
-                <Button onClick={() => setAutoDeliveredReport(null)}>Close</Button>
+              <div className="border-t border-gray-100 p-4 text-right">
+                <Button onClick={() => setAutoDeliveredReport([])}>Close</Button>
               </div>
             </CardContent>
           </Card>

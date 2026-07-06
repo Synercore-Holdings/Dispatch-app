@@ -29,6 +29,7 @@ model Job {
   totalExclVat     Float?
   sourceCreatedDate String?  @db.VarChar(255)
   sourceCreatedBy   String?  @db.VarChar(255)
+  totalExclVat      Float?
 
   eta                String?   @db.VarChar(255)
   scheduledAt        String?   @db.VarChar(255)

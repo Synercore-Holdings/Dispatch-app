@@ -62,8 +62,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         const allowedFields = [
           "ref", "customer", "pickup", "dropoff", "warehouse", "priority", "status",
-          "pallets", "outstandingQty", "totalExclVat", "eta", "scheduledAt", "dispatchedAt", "actualDeliveryAt",
-          "sourceCreatedDate", "sourceCreatedBy",
+          "pallets", "outstandingQty", "eta", "scheduledAt", "dispatchedAt", "actualDeliveryAt",
+          "sourceCreatedDate", "sourceCreatedBy", "totalExclVat",
           "returnedAt", "returnReason", "returnedPallets", "returnNotes",
           "exceptionReason", "overdueReason", "driverId", "notes", "internalNotes", "transporterBooked", "orderPicked",
           "coaAvailable", "hasFlowbin", "serviceType", "jobType", "transportService", "truckSize", "etd",
@@ -174,8 +174,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         const allowedFields = [
           "ref", "customer", "pickup", "dropoff", "warehouse", "priority", "status",
-          "pallets", "outstandingQty", "totalExclVat", "eta", "scheduledAt", "dispatchedAt", "actualDeliveryAt",
-          "sourceCreatedDate", "sourceCreatedBy",
+          "pallets", "outstandingQty", "eta", "scheduledAt", "dispatchedAt", "actualDeliveryAt",
+          "sourceCreatedDate", "sourceCreatedBy", "totalExclVat",
           "returnedAt", "returnReason", "returnedPallets", "returnNotes",
           "exceptionReason", "overdueReason", "driverId", "notes", "internalNotes", "transporterBooked", "orderPicked",
           "coaAvailable", "hasFlowbin", "serviceType", "jobType", "transportService", "truckSize", "etd",
@@ -230,6 +230,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           pallets: job.pallets as number | undefined, outstandingQty: job.outstandingQty as number | undefined,
           totalExclVat: job.totalExclVat as number | undefined,
           sourceCreatedDate: job.sourceCreatedDate as string | undefined, sourceCreatedBy: job.sourceCreatedBy as string | undefined,
+          totalExclVat: job.totalExclVat as number | undefined,
           eta: job.eta as string | undefined, scheduledAt: job.scheduledAt as string | undefined,
           dispatchedAt: job.dispatchedAt as string | undefined,
           actualDeliveryAt: job.actualDeliveryAt as string | undefined, exceptionReason: job.exceptionReason as string | undefined,
@@ -273,6 +274,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           pallets: job.pallets as number | undefined, outstandingQty: job.outstandingQty as number | undefined,
           totalExclVat: job.totalExclVat as number | undefined,
           sourceCreatedDate: job.sourceCreatedDate as string | undefined, sourceCreatedBy: job.sourceCreatedBy as string | undefined,
+          totalExclVat: job.totalExclVat as number | undefined,
           eta: job.eta as string | undefined, scheduledAt: job.scheduledAt as string | undefined,
           dispatchedAt: job.dispatchedAt as string | undefined,
           actualDeliveryAt: job.actualDeliveryAt as string | undefined, exceptionReason: job.exceptionReason as string | undefined,
@@ -322,8 +324,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           priority: req.body.priority || "normal", status: req.body.status || "pending",
           jobType: req.body.jobType || "order",
           pallets: req.body.pallets, outstandingQty: req.body.outstandingQty,
-          totalExclVat: req.body.totalExclVat,
-          sourceCreatedDate: req.body.sourceCreatedDate, sourceCreatedBy: req.body.sourceCreatedBy,
+          sourceCreatedDate: req.body.sourceCreatedDate, sourceCreatedBy: req.body.sourceCreatedBy, totalExclVat: req.body.totalExclVat,
           eta: req.body.eta, scheduledAt: req.body.scheduledAt, dispatchedAt: req.body.dispatchedAt, actualDeliveryAt: req.body.actualDeliveryAt,
           returnedAt: req.body.returnedAt, returnReason: req.body.returnReason,
           returnedPallets: req.body.returnedPallets, returnNotes: req.body.returnNotes,

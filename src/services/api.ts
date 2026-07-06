@@ -345,8 +345,8 @@ export const invoiceReconciliationAPI = {
     return fetchAPI<{ lines: InvoiceReconciliationLine[]; reviews: Record<string, string>; timingNotes?: Record<string, string>; timingComments?: Record<string, string>; timingNoteMeta?: Record<string, InvoiceReconciliationTimingNoteMeta>; uploadMeta?: InvoiceReconciliationUploadMeta | null; uploads?: (InvoiceReconciliationUploadMeta | null)[]; audits?: InvoiceReconciliationAudit[] }>("/api/invoice-reconciliation");
   },
 
-  bulkUpsertLines: async (lines: InvoiceReconciliationLine[]): Promise<{ lines: InvoiceReconciliationLine[]; autoDelivered: { count: number; refs: string[] } }> => {
-    return fetchAPI<{ lines: InvoiceReconciliationLine[]; autoDelivered: { count: number; refs: string[] } }>("/api/invoice-reconciliation?action=bulk-upsert-lines", {
+  bulkUpsertLines: async (lines: InvoiceReconciliationLine[]): Promise<{ lines: InvoiceReconciliationLine[]; autoDelivered: { ref: string; customer: string }[] }> => {
+    return fetchAPI<{ lines: InvoiceReconciliationLine[]; autoDelivered: { ref: string; customer: string }[] }>("/api/invoice-reconciliation?action=bulk-upsert-lines", {
       method: "POST",
       body: JSON.stringify({ lines }),
     });
@@ -380,11 +380,11 @@ export const invoiceReconciliationAPI = {
     });
   },
 
-  undoLastUpload: async (): Promise<{ filename: string; deletedLines: number; revertedJobs: number }> => {
-    return fetchAPI<{ filename: string; deletedLines: number; revertedJobs: number }>(
-      "/api/invoice-reconciliation?action=undo-last-upload",
-      { method: "POST", body: JSON.stringify({}) }
-    );
+  undoLastUpload: async (): Promise<{ linesRemoved: number; ordersReverted: number }> => {
+    return fetchAPI<{ linesRemoved: number; ordersReverted: number }>("/api/invoice-reconciliation?action=undo-last-upload", {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
   },
 };
 

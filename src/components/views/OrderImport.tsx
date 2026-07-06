@@ -36,6 +36,7 @@ interface ImportedOrder {
   totalExclVat?: number;    // Total value excl. VAT from Excel
   sourceCreatedDate?: string;
   sourceCreatedBy?: string;
+  totalExclVat?: number;     // Total excl. VAT from sales order import
   eta?: string;  // normalized string (e.g., "2025-10-10")
   notes?: string;
 }
@@ -183,6 +184,20 @@ const parsePallets = (v?: string | number): number | undefined => {
   return Number.isFinite(n) ? Math.round(n) : undefined;
 };
 
+const parseCurrency = (v?: string | number): number | undefined => {
+  if (v === undefined || v === null || v === "") return undefined;
+  if (typeof v === "number") return v;
+  // Strip currency symbols, spaces, then handle decimal comma
+  const stripped = String(v).replace(/[R$£€\s]/g, "");
+  const commaParts = stripped.split(",");
+  const cleaned =
+    commaParts.length === 2 && commaParts[1].length <= 2
+      ? stripped.replace(",", ".")
+      : stripped.replace(/,/g, "");
+  const n = parseFloat(cleaned);
+  return Number.isFinite(n) ? n : undefined;
+};
+
 type HeaderIndex = Record<string, number>;
 const indexHeaders = (headers: string[]): HeaderIndex => {
   const map: HeaderIndex = {};
@@ -224,6 +239,7 @@ const ALIASES: Record<keyof Omit<ImportedOrder, never>, string[]> = {
   totalExclVat: ["total excl vat", "total excl. vat", "excl vat", "excl. vat", "net value", "excl vat total", "total excl tax", "net amount", "value excl vat", "total value excl vat"],
   sourceCreatedDate: ["datecreated (day-month-year)", "datecreated", "date created", "created date", "created on"],
   sourceCreatedBy: ["createdbyuserid", "created by user id", "created by userid", "created by", "creator", "user"],
+  totalExclVat: ["total excl vat", "total excl. vat", "total excl vat (r)", "net value", "net amount", "excl vat", "excl. vat", "amount excl", "amount excl vat", "value excl vat"],
   eta: ["eta", "delivery date", "required date", "promise date", "due date"],
   notes: ["notes", "remarks", "comment", "inventory description", "description"],
 };
@@ -243,6 +259,7 @@ const rowToOrder = (headers: string[], row: any[], i: number): ImportedOrder | n
   const totalExclVatIdx = findFirst(idx, ALIASES.totalExclVat);
   const sourceCreatedDateIdx = findFirst(idx, ALIASES.sourceCreatedDate);
   const sourceCreatedByIdx = findFirst(idx, ALIASES.sourceCreatedBy);
+  const totalExclVatIdx = findFirst(idx, ALIASES.totalExclVat);
   const etaIdx = findFirst(idx, ALIASES.eta);
   const notesIdx = findFirst(idx, ALIASES.notes);
 
@@ -289,6 +306,7 @@ const rowToOrder = (headers: string[], row: any[], i: number): ImportedOrder | n
   const totalExclVat = parseCurrencyVal(coalesce(row, totalExclVatIdx));
   const sourceCreatedDate = normalizeEta(coalesce(row, sourceCreatedDateIdx));
   const sourceCreatedBy = safeStr(coalesce(row, sourceCreatedByIdx));
+  const totalExclVat = parseCurrency(coalesce(row, totalExclVatIdx));
 
   if (!ref || !customer) return null;
 
@@ -311,6 +329,7 @@ const rowToOrder = (headers: string[], row: any[], i: number): ImportedOrder | n
     totalExclVat,
     sourceCreatedDate: safe(sourceCreatedDate),
     sourceCreatedBy: safe(sourceCreatedBy),
+    totalExclVat,
     eta: safe(eta),
     notes: safe(notes),
   };
@@ -514,6 +533,7 @@ export const OrderImport: React.FC = () => {
         totalExclVat: order.totalExclVat,
         sourceCreatedDate: order.sourceCreatedDate,
         sourceCreatedBy: order.sourceCreatedBy,
+        totalExclVat: order.totalExclVat,
         eta: order.eta,
         notes: order.notes,
       }));
@@ -610,23 +630,15 @@ export const OrderImport: React.FC = () => {
       "Total Excl VAT",
       "DateCreated (Day-Month-Year)",
       "CreatedByUserid",
+      "Total Excl VAT",
     ];
 
     if (format === "csv") {
-      const example = [
-        "SO-0001",
-        "Sample Customer",
-        "Normal",
-        "2025-10-10",
-        "ITEM-001",
-        "Sample Line — fragile",
-        DEFAULT_WAREHOUSE,
-        "120",
-        "1500.00",
-        "2025-10-01",
-        "USER001",
+      const examples = [
+        ["SO-0001", "Sample Customer", "Normal", "2025-10-10", "ITEM-001", "Sample Line — fragile", "Finished Goods AFi K58", "120", "2025-10-01", "USER001", "50000"],
+        ["SO-0002", "Sample Customer 2", "Normal", "2025-10-11", "ITEM-002", "Sample Line — raw material", "Raw - AFi Klapmuts K58", "60", "2025-10-01", "USER001", "25000"],
       ];
-      const csv = [headers.join(","), example.join(",")].join("\n");
+      const csv = [headers.join(","), ...examples.map((r) => r.join(","))].join("\n");
       const blob = new Blob([csv], { type: "text/csv" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -637,7 +649,8 @@ export const OrderImport: React.FC = () => {
     } else {
       const data = [
         headers,
-        ["SO-0001", "Sample Customer", "Normal", "2025-10-10", "ITEM-001", "Sample Line — fragile", DEFAULT_WAREHOUSE, "120", "1500.00", "2025-10-01", "USER001"],
+        ["SO-0001", "Sample Customer", "Normal", "2025-10-10", "ITEM-001", "Sample Line — fragile", "Finished Goods AFi K58", "120", "2025-10-01", "USER001", "50000"],
+        ["SO-0002", "Sample Customer 2", "Normal", "2025-10-11", "ITEM-002", "Sample Line — raw material", "Raw - AFi Klapmuts K58", "60", "2025-10-01", "USER001", "25000"],
       ];
       const worksheet = XLSX.utils.aoa_to_sheet(data);
       const workbook = XLSX.utils.book_new();
@@ -731,16 +744,17 @@ export const OrderImport: React.FC = () => {
           </button>
         </div>
         {showFormatTips && (
-          <div className="mt-2 rounded-lg bg-blue-50 border border-blue-100 p-3 text-xs text-blue-800">
+          <div className="mt-2 rounded-lg bg-blue-50 border border-blue-100 p-3 text-xs text-blue-800 space-y-2">
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-1">
               <span><strong>Document No</strong> → Reference</span>
               <span><strong>Customer Name</strong> → Customer</span>
-              <span><strong>Warehouse</strong> → Pickup</span>
+              <span><strong>Warehouse</strong> → Pickup (K58 only)</span>
               <span><strong>Delivery Date</strong> → ETA</span>
               <span><strong>Inventory Description</strong> → Line Item</span>
               <span><strong>Status</strong> → Priority</span>
               <span><strong>Total Excl VAT</strong> → Order Value</span>
             </div>
+            <p className="text-blue-700">Valid K58 warehouses: <strong>Finished Goods AFi K58</strong>, <strong>Raw - AFi Klapmuts K58</strong>. Rows from Pretoria warehouses are automatically skipped.</p>
           </div>
         )}
       </Card>
@@ -802,6 +816,7 @@ export const OrderImport: React.FC = () => {
                     <th className="px-3 py-2 text-right font-semibold text-gray-700">Total Excl VAT</th>
                     <th className="px-3 py-2 text-left font-semibold text-gray-700">Date Created</th>
                     <th className="px-3 py-2 text-left font-semibold text-gray-700">Created By</th>
+                    <th className="px-3 py-2 text-right font-semibold text-gray-700">Total Excl VAT</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -818,6 +833,7 @@ export const OrderImport: React.FC = () => {
                       <td className="px-3 py-2 text-right text-gray-700">{order.totalExclVat != null ? `R ${order.totalExclVat.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}</td>
                       <td className="px-3 py-2 text-gray-500">{String(order.sourceCreatedDate ?? "—")}</td>
                       <td className="px-3 py-2 text-gray-500">{String(order.sourceCreatedBy ?? "—")}</td>
+                      <td className="px-3 py-2 text-right text-gray-700">{order.totalExclVat != null ? `R ${order.totalExclVat.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}</td>
                     </tr>
                   ))}
                 </tbody>

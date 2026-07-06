@@ -180,55 +180,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           }),
         );
 
-        // Auto-deliver matching jobs: group by ASO, sum qty, set status=delivered + pallets
-        const asoMap = new Map<string, { totalQty: number; invoiceDate: string | null }>();
-        for (const line of lines as Record<string, unknown>[]) {
-          const aso = normalize(line.aso);
-          if (!aso) continue;
-          const qty = Number.isFinite(Number(line.invoiceQty)) ? Number(line.invoiceQty) : 0;
-          const invoiceDate = normalize(line.invoiceDate) || null;
-          const existing = asoMap.get(aso);
-          if (existing) {
-            existing.totalQty += qty;
-            if (!existing.invoiceDate && invoiceDate) existing.invoiceDate = invoiceDate;
-          } else {
-            asoMap.set(aso, { totalQty: qty, invoiceDate });
-          }
-        }
-        const asos = Array.from(asoMap.keys());
-        const autoDeliveredRefs: string[] = [];
+        // Auto-deliver jobs whose ref matches an ASO in this upload
+        const asoDateMap = new Map<string, string>();
+        result.forEach((line) => {
+          if (line.aso && line.invoiceDate) asoDateMap.set(line.aso, line.invoiceDate);
+        });
+        const asos = Array.from(asoDateMap.keys());
+        let autoDelivered: { ref: string; customer: string }[] = [];
         if (asos.length > 0) {
           const matchingJobs = await prisma.job.findMany({
-            where: { ref: { in: asos } },
-            select: { id: true, ref: true },
+            where: { ref: { in: asos }, status: { notIn: ["delivered", "returned", "cancelled"] } },
+            select: { id: true, ref: true, customer: true },
           });
           if (matchingJobs.length > 0) {
-            const today = new Date().toISOString().slice(0, 10);
-            await prisma.$transaction(
-              matchingJobs.map((job) => {
-                const asoData = asoMap.get(job.ref)!;
-                const pallets = asoData.totalQty > 0 ? Math.ceil(asoData.totalQty / 1000) : undefined;
-                return prisma.job.update({
-                  where: { id: job.id },
-                  data: {
-                    status: "delivered",
-                    actualDeliveryAt: asoData.invoiceDate || today,
-                    ...(pallets !== undefined ? { pallets } : {}),
-                  },
-                });
+            const updates = matchingJobs.map((job) =>
+              prisma.job.update({
+                where: { id: job.id },
+                data: {
+                  status: "delivered",
+                  actualDeliveryAt: asoDateMap.get(job.ref) || new Date().toISOString(),
+                },
               }),
             );
-            autoDeliveredRefs.push(...matchingJobs.map((j) => j.ref));
+            await prisma.$transaction(updates);
+            const seen = new Set<string>();
+            autoDelivered = matchingJobs
+              .filter((j) => { if (seen.has(j.ref)) return false; seen.add(j.ref); return true; })
+              .map((j) => ({ ref: j.ref, customer: j.customer }));
           }
         }
 
-        return res.status(201).json({
-          success: true,
-          data: {
-            lines: result.map(formatLine),
-            autoDelivered: { count: autoDeliveredRefs.length, refs: autoDeliveredRefs },
-          },
-        });
+        return res.status(201).json({ success: true, data: result.map(formatLine), autoDelivered });
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "Failed to save invoice reconciliation rows";
         if (message.includes("required") || message.includes("too long")) {
@@ -348,71 +330,56 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           orderBy: { uploadedAt: "desc" },
         });
         if (!latestUpload) {
-          return res.status(404).json({ success: false, error: "No uploads to undo" });
+          return res.status(404).json({ success: false, error: "No upload history found" });
         }
 
-        const rowsToDelete = Number(latestUpload.rowsAdded) || 0;
-        let deletedCount = 0;
-        let affectedAsos: string[] = [];
+        const rowsToDelete = latestUpload.rowsAdded as number;
 
-        if (rowsToDelete > 0) {
-          const recentLines = await prisma.invoiceReconciliationLine.findMany({
-            orderBy: { createdAt: "desc" },
-            take: rowsToDelete,
-            select: { id: true, aso: true },
-          });
-          const idsToDelete = recentLines.map((l) => l.id);
-          affectedAsos = [...new Set(recentLines.map((l) => l.aso))];
+        // Find the N most recently created invoice lines
+        const linesToDelete = await prisma.invoiceReconciliationLine.findMany({
+          orderBy: { createdAt: "desc" },
+          take: rowsToDelete,
+          select: { id: true, aso: true },
+        });
+        const lineIds = linesToDelete.map((l) => l.id);
+        const deletedAsos = new Set(linesToDelete.map((l) => l.aso));
 
-          await prisma.invoiceReconciliationLine.deleteMany({
-            where: { id: { in: idsToDelete } },
+        // After deletion, which ASOs will have zero remaining lines?
+        const remainingLines = await prisma.invoiceReconciliationLine.findMany({
+          where: { aso: { in: Array.from(deletedAsos) }, id: { notIn: lineIds } },
+          select: { aso: true },
+        });
+        const remainingAsos = new Set(remainingLines.map((l) => l.aso));
+        const asosToClear = Array.from(deletedAsos).filter((aso) => !remainingAsos.has(aso));
+
+        // Revert auto-delivered jobs for cleared ASOs back to pending
+        let revertedCount = 0;
+        if (asosToClear.length > 0) {
+          const reverted = await prisma.job.updateMany({
+            where: { ref: { in: asosToClear }, status: "delivered", actualDeliveryAt: { not: null } },
+            data: { status: "pending", actualDeliveryAt: null },
           });
-          deletedCount = idsToDelete.length;
+          revertedCount = reverted.count;
         }
 
-        let revertedJobs = 0;
-        if (affectedAsos.length > 0) {
-          const remaining = await prisma.invoiceReconciliationLine.findMany({
-            where: { aso: { in: affectedAsos } },
-            select: { aso: true },
-          });
-          const asosWithLines = new Set(remaining.map((l) => l.aso));
-          const asosToRevert = affectedAsos.filter((aso) => !asosWithLines.has(aso));
+        await prisma.$transaction([
+          prisma.invoiceReconciliationLine.deleteMany({ where: { id: { in: lineIds } } }),
+          prisma.invoiceReconciliationUpload.delete({ where: { id: latestUpload.id } }),
+          prisma.invoiceReconciliationAudit.create({
+            data: {
+              entityType: "invoice-upload",
+              entityKey: String(latestUpload.id),
+              action: "Upload undone",
+              fromValue: latestUpload.filename as string,
+              toValue: `${lineIds.length} lines removed, ${revertedCount} orders reverted`,
+              userId: user.id,
+            },
+          }),
+        ]);
 
-          if (asosToRevert.length > 0) {
-            const reverted = await prisma.job.updateMany({
-              where: { ref: { in: asosToRevert }, status: "delivered" },
-              data: { status: "pending", actualDeliveryAt: null },
-            });
-            revertedJobs = reverted.count;
-          }
-        }
-
-        await prisma.invoiceReconciliationUpload.delete({
-          where: { id: latestUpload.id },
-        });
-
-        await prisma.invoiceReconciliationAudit.create({
-          data: {
-            entityType: "invoice-ledger",
-            entityKey: String(latestUpload.id),
-            action: "Upload undone",
-            fromValue: String(latestUpload.filename),
-            toValue: `${deletedCount} lines deleted, ${revertedJobs} jobs reverted to pending`,
-            userId: user.id,
-          },
-        });
-
-        return res.json({
-          success: true,
-          data: {
-            filename: latestUpload.filename,
-            deletedLines: deletedCount,
-            revertedJobs,
-          },
-        });
+        return res.json({ success: true, data: { linesRemoved: lineIds.length, ordersReverted: revertedCount } });
       } catch (error) {
-        console.error("Error undoing invoice upload:", error);
+        console.error("Error undoing last invoice upload:", error);
         return res.status(500).json({ success: false, error: "Failed to undo last upload" });
       }
     }
