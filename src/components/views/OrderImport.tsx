@@ -9,7 +9,7 @@ import { useDispatch } from "../../context/DispatchContext";
 import { useNotification } from "../../context/NotificationContext";
 import { useAuth } from "../../context/AuthContext";
 import { JobPriority, JobStatus } from "../../types";
-import { DEFAULT_PICKUP, DEFAULT_WAREHOUSE, isPtaWarehouse } from "../../config/site";
+import { DEFAULT_PICKUP, isPtaWarehouse } from "../../config/site";
 
 /**
  * OrderImport component (Sales Orders mapping + ETA date normalization)
@@ -36,7 +36,6 @@ interface ImportedOrder {
   totalExclVat?: number;    // Total value excl. VAT from Excel
   sourceCreatedDate?: string;
   sourceCreatedBy?: string;
-  totalExclVat?: number;     // Total excl. VAT from sales order import
   eta?: string;  // normalized string (e.g., "2025-10-10")
   notes?: string;
 }
@@ -150,22 +149,6 @@ const normalizePriority = (p?: string): JobPriority => {
   if (v === "high") return "high";
   if (v === "low") return "low";
   return "normal";
-};
-
-const parseCurrencyVal = (v?: string | number): number | undefined => {
-  if (v === undefined || v === null || v === "") return undefined;
-  if (typeof v === "number") return Number.isFinite(v) ? v : undefined;
-  const trimmed = String(v).trim();
-  const commaParts = trimmed.replace(/\s/g, "").split(",");
-  const usesDecimalComma =
-    commaParts.length === 2 &&
-    !trimmed.includes(".") &&
-    (/\s/.test(trimmed) || commaParts[0].length >= 2);
-  const cleaned = usesDecimalComma
-    ? trimmed.replace(/\s/g, "").replace(",", ".")
-    : trimmed.replace(/\s/g, "").replace(/,/g, "");
-  const n = parseFloat(cleaned);
-  return Number.isFinite(n) ? n : undefined;
 };
 
 const parsePallets = (v?: string | number): number | undefined => {
@@ -301,7 +284,6 @@ const rowToOrder = (headers: string[], row: any[], i: number): ImportedOrder | n
 
   const pallets = parsePallets(safeStr(coalesce(row, palletsIdx)));
   const outstandingQty = parsePallets(safeStr(coalesce(row, outstandingQtyIdx)));
-  const totalExclVat = parseCurrencyVal(coalesce(row, totalExclVatIdx));
   const sourceCreatedDate = normalizeEta(coalesce(row, sourceCreatedDateIdx));
   const sourceCreatedBy = safeStr(coalesce(row, sourceCreatedByIdx));
   const totalExclVat = parseCurrency(coalesce(row, totalExclVatIdx));
@@ -327,7 +309,6 @@ const rowToOrder = (headers: string[], row: any[], i: number): ImportedOrder | n
     totalExclVat,
     sourceCreatedDate: safe(sourceCreatedDate),
     sourceCreatedBy: safe(sourceCreatedBy),
-    totalExclVat,
     eta: safe(eta),
     notes: safe(notes),
   };
