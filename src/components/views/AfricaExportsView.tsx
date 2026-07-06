@@ -1499,7 +1499,7 @@ export const AfricaExportsView: React.FC<AfricaExportsViewProps> = ({ initialRef
       queueFilter === "approved" ? approvedShipments :
       queueFilter === "pending-approval" ? pendingApprovalShipments :
       queueFilter === "archived" ? archivedShipments :
-      activeShipments;
+      activeShipments.filter((item) => item.status !== "delivered");
     const query = searchQuery.toLowerCase();
     return baseShipments.filter((item) =>
       (statusFilter === "all" || item.status === statusFilter) &&
@@ -2603,7 +2603,7 @@ export const AfricaExportsView: React.FC<AfricaExportsViewProps> = ({ initialRef
               </div>
               <div className="mb-3 flex flex-wrap gap-1 rounded-card border border-gray-200 bg-gray-50 p-1">
                 {[
-                  { id: "all" as ExportQueueFilter, label: "All", count: activeShipments.length, activeClass: "bg-white text-gray-900" },
+                  { id: "all" as ExportQueueFilter, label: "All", count: activeShipments.filter((item) => item.status !== "delivered").length, activeClass: "bg-white text-gray-900" },
                   { id: "ready" as ExportQueueFilter, label: "Ready", count: readyShipments.length, activeClass: "bg-green-50 text-green-700" },
                   { id: "missing-docs" as ExportQueueFilter, label: "Docs", count: missingDocsShipments.length, activeClass: "bg-red-50 text-red-700" },
                   { id: "risks" as ExportQueueFilter, label: "Risks", count: riskyShipments.length, activeClass: "bg-red-50 text-red-700" },
