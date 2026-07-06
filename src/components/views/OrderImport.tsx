@@ -526,7 +526,7 @@ export const OrderImport: React.FC = () => {
         warehouse: order.warehouse,
         priority: normalizePriority(order.priority),
         status: DEFAULT_STATUS,
-        pallets: order.pallets,
+        pallets: order.pallets ?? (order.outstandingQty ? Math.ceil(order.outstandingQty / 1000) : undefined),
         outstandingQty: order.outstandingQty,
         totalExclVat: order.totalExclVat,
         sourceCreatedDate: order.sourceCreatedDate,
