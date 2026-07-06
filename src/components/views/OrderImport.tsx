@@ -546,6 +546,14 @@ export const OrderImport: React.FC = () => {
           hasFlowbin: existing.hasFlowbin,
           internalNotes: existing.internalNotes,
           serviceType: existing.serviceType,
+          dispatchedAt: existing.dispatchedAt,
+          actualDeliveryAt: existing.actualDeliveryAt,
+          returnedAt: existing.returnedAt,
+          returnReason: existing.returnReason,
+          returnedPallets: existing.returnedPallets,
+          returnNotes: existing.returnNotes,
+          exceptionReason: existing.exceptionReason,
+          overdueReason: existing.overdueReason,
         };
 
         // Delete all old line items for this ref
@@ -559,7 +567,7 @@ export const OrderImport: React.FC = () => {
 
         // Recreate from import data, preserving workflow state
         for (const importLine of importLines) {
-          ordersToRecreate.push({ ...importLine, ...preserved } as any);
+          ordersToRecreate.push({ ...importLine, ...preserved, pallets: importLine.pallets ?? existing.pallets } as any);
         }
         updatedCount += importLines.length;
       }

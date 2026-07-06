@@ -168,7 +168,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onOpenAlerts, onNavigate }
     const departuresThisWeek = new Set<string>();
     const deliveredMissingDispatchThisWeek = new Set<string>();
     orderJobs.forEach((j) => {
-      const plannedDepartureDate = j.etd || calculateETD(j.eta, j.transportService);
+      const plannedDepartureDate = j.etd || calculateETD(j.eta, j.transportService ?? "economy");
       const canStillDepart = j.status !== "delivered" && j.status !== "returned" && j.status !== "cancelled";
       if (canStillDepart && isThisWeek(plannedDepartureDate)) {
         departuresThisWeek.add(j.ref);
