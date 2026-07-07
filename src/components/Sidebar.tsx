@@ -298,13 +298,16 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeItem, onItemChange, coll
 
   return (
     <div
-      className={`fixed left-0 top-0 h-screen flex flex-col z-30 transition-all duration-300 ${
+      className={`fixed left-0 top-0 h-screen flex flex-col overflow-y-auto z-30 transition-all duration-300 sidebar-scroll ${
         collapsed ? "w-16" : "w-60"
       }`}
       style={{ background: "#064e3b" }}
     >
       {/* Header */}
-      <div className={`flex items-center justify-between py-5 border-b border-white/[0.06] ${collapsed ? "px-3" : "px-5"}`}>
+      <div
+        className={`sticky top-0 z-10 flex items-center justify-between py-5 border-b border-white/[0.06] flex-shrink-0 ${collapsed ? "px-3" : "px-5"}`}
+        style={{ background: "#064e3b" }}
+      >
         {!collapsed && (
           <div>
             <h1 className="text-white font-bold text-2xl tracking-tight leading-tight">Dispatch</h1>
@@ -323,7 +326,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeItem, onItemChange, coll
 
       {/* Search */}
       {!collapsed && (
-        <div className="px-4 pt-4 pb-2">
+        <div className="px-4 pt-4 pb-2 flex-shrink-0">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
             <input
@@ -338,7 +341,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeItem, onItemChange, coll
       )}
 
       {/* Navigation */}
-      <div className="flex-1 overflow-y-auto px-3 pt-3 pb-2 sidebar-scroll">
+      <div className="flex-1 px-3 pt-3 pb-2">
         {/* Dashboard */}
         {matchesSearch("Dashboard") && renderNavButton({
           id: "dashboard", icon: LayoutDashboard, label: "Dashboard",
@@ -388,7 +391,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeItem, onItemChange, coll
 
       {/* Quick Stats */}
       {!collapsed && (
-        <div className="mx-4 mb-3 p-3 rounded-xl bg-white/10">
+        <div className="mx-4 mb-3 p-3 rounded-xl bg-white/10 flex-shrink-0">
           <p className="text-[11px] font-bold text-white/60 uppercase tracking-[0.14em] mb-3">
             Quick Stats
           </p>
@@ -418,7 +421,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeItem, onItemChange, coll
       )}
 
       {/* Bottom Utilities */}
-      <div className="border-t border-white/[0.06] px-3 pt-4 pb-3 space-y-0.5">
+      <div className="border-t border-white/[0.06] px-3 pt-4 pb-3 space-y-0.5 flex-shrink-0">
         {filteredBottomItems.map((item) => {
           const Icon = item.icon;
           return (
@@ -492,7 +495,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeItem, onItemChange, coll
 
       {/* Profile Card */}
       {!collapsed && (
-        <div className="mx-4 mb-4 p-3.5 rounded-xl border border-white/[0.08] flex items-center gap-3 bg-white/10">
+        <div className="mx-4 mb-4 p-3.5 rounded-xl border border-white/[0.08] flex items-center gap-3 bg-white/10 flex-shrink-0">
           <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center flex-shrink-0 shadow-sm">
             <User className="w-4 h-4 text-white" />
           </div>
