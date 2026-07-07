@@ -8,6 +8,7 @@ import {
   Clock,
   Globe2,
   TrendingUp,
+  TrendingDown,
   Minus,
   Bell,
   Banknote,
@@ -148,6 +149,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ onOpenAlerts, onNavigate }
     const endOfWeek = new Date(startOfWeek);
     endOfWeek.setDate(endOfWeek.getDate() + 7);
 
+    // Pending orders whose ETA/ETD has already passed — the real backlog signal,
+    // as opposed to pending orders simply not due yet.
+    const pendingOverdue = uniqueRefs((j) => {
+      if (j.status !== "pending") return false;
+      const dateStr = j.eta || j.etd;
+      if (!dateStr) return false;
+      const date = new Date(dateStr);
+      if (Number.isNaN(date.getTime())) return false;
+      date.setHours(0, 0, 0, 0);
+      return date < now;
+    });
+
     const isThisWeek = (dateString: string | undefined) => {
       if (!dateString) return false;
       const date = new Date(dateString);
@@ -254,6 +267,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onOpenAlerts, onNavigate }
     return {
       total,
       pending,
+      pendingOverdue,
       assigned,
       inTransit,
       delivered,
@@ -409,7 +423,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ onOpenAlerts, onNavigate }
     },
     {
       icon: ClipboardList, value: stats.pending, label: "PENDING",
-      change: `${stats.assigned} assigned`, changeType: "neutral" as const, sublabel: stats.pending > 40 ? "Backlog Building" : stats.pending > 0 ? "Under Control" : "Clear Deck",
+      change: stats.pendingOverdue > 0 ? `${stats.pendingOverdue} overdue` : "None overdue",
+      changeType: stats.pendingOverdue > 0 ? "down" as const : "neutral" as const,
+      sublabel: stats.pendingOverdue > 5 ? "Backlog Building" : stats.pending > 0 ? "Under Control" : "Clear Deck",
       borderColor: "border-l-amber-500", iconBg: "bg-amber-50", iconColor: "text-amber-500", nav: "clipboard", tab: "open",
     },
     {
@@ -542,9 +558,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onOpenAlerts, onNavigate }
             </div>
             <div className="flex items-center gap-1 mt-1.5">
               {card.changeType === "up" && <TrendingUp className="w-3 h-3 text-green-500" />}
+              {card.changeType === "down" && <TrendingDown className="w-3 h-3 text-red-500" />}
               {card.changeType === "neutral" && <Minus className="w-3 h-3 text-gray-400" />}
               <span className={`text-[10px] ${
-                card.changeType === "up" ? "text-green-600" : "text-gray-500"
+                card.changeType === "up" ? "text-green-600" : card.changeType === "down" ? "text-red-600" : "text-gray-500"
               }`}>
                 {card.change}
               </span>
@@ -552,6 +569,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onOpenAlerts, onNavigate }
             {card.sublabel && (
               <span className={`inline-block mt-1 text-[9px] font-semibold px-1.5 py-0.5 rounded ${
                 card.sublabel === "Needs Attention" ? "text-orange-700 bg-orange-50" :
+                card.sublabel === "Backlog Building" ? "text-red-700 bg-red-50" :
                 card.sublabel === "Completed" ? "text-green-700 bg-green-50" :
                 card.sublabel === "Active" ? "text-blue-700 bg-blue-50" :
                 card.sublabel === "Busy Week" ? "text-purple-700 bg-purple-50" :
