@@ -9,7 +9,7 @@ import { useDispatch } from "../../context/DispatchContext";
 import { useNotification } from "../../context/NotificationContext";
 import { useAuth } from "../../context/AuthContext";
 import { JobPriority, JobStatus } from "../../types";
-import { DEFAULT_PICKUP, isPtaWarehouse } from "../../config/site";
+import { DEFAULT_PICKUP, isK58Warehouse } from "../../config/site";
 
 /**
  * OrderImport component (Sales Orders mapping + ETA date normalization)
@@ -258,8 +258,8 @@ const rowToOrder = (headers: string[], row: any[], i: number): ImportedOrder | n
     safeStr(coalesce(row, idx["warehouse"])) ??
     safeStr(coalesce(row, warehouseIdx));
 
-  // Skip rows tied to internal/non-dispatch Pretoria warehouses (handled by the separate PTA deployment).
-  if (warehouse && isPtaWarehouse(warehouse)) {
+  // Only import rows explicitly tied to a K58 warehouse — other sites (e.g. Pretoria) are a different process.
+  if (warehouse && !isK58Warehouse(warehouse)) {
     return null;
   }
 
@@ -365,11 +365,11 @@ export const OrderImport: React.FC = () => {
   const [isPurgingIgnored, setIsPurgingIgnored] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Existing orders that match the ignored-warehouse list (legacy rows imported before the filter)
+  // Existing orders assigned to a non-K58 warehouse (legacy rows imported before the filter)
   const ignoredWarehouseJobIds = useMemo(() => {
     return jobs
       .filter((j) => j.jobType !== "ibt")
-      .filter((j) => j.warehouse && isPtaWarehouse(j.warehouse))
+      .filter((j) => j.warehouse && !isK58Warehouse(j.warehouse))
       .map((j) => j.id);
   }, [jobs]);
 
@@ -381,8 +381,8 @@ export const OrderImport: React.FC = () => {
     }
 
     const ok = await confirm({
-      title: "Remove Ignored Warehouse Orders?",
-      message: `This will permanently delete ${ignoredWarehouseJobIds.length} order${ignoredWarehouseJobIds.length === 1 ? "" : "s"} assigned to internal storage locations (Pretoria). This cannot be undone.`,
+      title: "Remove Non-K58 Orders?",
+      message: `This will permanently delete ${ignoredWarehouseJobIds.length} order${ignoredWarehouseJobIds.length === 1 ? "" : "s"} assigned to a warehouse outside K58. This cannot be undone.`,
       type: "danger",
       confirmText: "Delete orders",
     });
@@ -664,7 +664,7 @@ export const OrderImport: React.FC = () => {
               onClick={purgeIgnoredWarehouseOrders}
               disabled={isPurgingIgnored}
               className="text-sm text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 hover:border-red-300"
-              title="Remove customer orders assigned to internal storage warehouses"
+              title="Remove customer orders assigned to a warehouse outside K58"
             >
               {isPurgingIgnored ? (
                 <span className="flex items-center gap-2">
@@ -674,7 +674,7 @@ export const OrderImport: React.FC = () => {
               ) : (
                 <>
                   <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-                  Remove Ignored Warehouses ({ignoredWarehouseJobIds.length})
+                  Remove Non-K58 Orders ({ignoredWarehouseJobIds.length})
                 </>
               )}
             </Button>
@@ -734,7 +734,7 @@ export const OrderImport: React.FC = () => {
               <span><strong>Status</strong> → Priority</span>
               <span><strong>Total Excl VAT</strong> → Order Value</span>
             </div>
-            <p className="text-blue-700">Valid K58 warehouses: <strong>Finished Goods AFi K58</strong>, <strong>Raw - AFi Klapmuts K58</strong>. Rows from Pretoria warehouses are automatically skipped.</p>
+            <p className="text-blue-700">Only rows whose Warehouse column names a K58 warehouse (e.g. <strong>Finished Goods AFi K58</strong>, <strong>Raw - AFi Klapmuts K58</strong>) are imported. Any other warehouse — including Pretoria — is skipped automatically.</p>
           </div>
         )}
       </Card>
