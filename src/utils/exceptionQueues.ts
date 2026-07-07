@@ -31,6 +31,15 @@ function latestDate(values: Array<string | undefined>): string | undefined {
     .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0];
 }
 
+// Single source of truth for "when is this order due" — prefers the latest
+// (revised) ETD across its open lines, falling back to the latest ETA.
+// Used consistently for overdue/dispatch-due checks across the app.
+export function getGroupDueDateString(openLines: Job[]): string | undefined {
+  const latestEtd = latestDate(openLines.map((job) => calculateRevisedETD(job) || job.etd));
+  const latestEta = latestDate(openLines.map((job) => job.eta));
+  return latestEtd || latestEta;
+}
+
 export function buildExceptionQueues(jobs: Job[]): Record<ExceptionQueueKey, ExceptionQueueItem[]> {
   const now = new Date();
   now.setHours(0, 0, 0, 0);

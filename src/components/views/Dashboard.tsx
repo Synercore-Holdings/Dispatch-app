@@ -30,6 +30,7 @@ import { useAuth } from "../../context/AuthContext";
 import { africaExportsAPI } from "../../services/api";
 import { calculateETD, calculateRevisedETD } from "../../utils/deliveryDates";
 import { formatNumber } from "../../utils/format";
+import { getGroupDueDateString } from "../../utils/exceptionQueues";
 
 const AFRICA_EXPORTS_KEY = "dispatch_africa_export_shipments_v2";
 
@@ -149,16 +150,29 @@ export const Dashboard: React.FC<DashboardProps> = ({ onOpenAlerts, onNavigate }
     const endOfWeek = new Date(startOfWeek);
     endOfWeek.setDate(endOfWeek.getDate() + 7);
 
-    // Pending orders whose ETA/ETD has already passed — the real backlog signal,
-    // as opposed to pending orders simply not due yet.
-    const pendingOverdue = uniqueRefs((j) => {
-      if (j.status !== "pending") return false;
-      const dateStr = j.eta || j.etd;
-      if (!dateStr) return false;
-      const date = new Date(dateStr);
-      if (Number.isNaN(date.getTime())) return false;
-      date.setHours(0, 0, 0, 0);
-      return date < now;
+    // Pending orders that are genuinely overdue — same definition as the
+    // Exceptions queue (latest ETD/revised-ETD across open lines, falling back
+    // to ETA, and past due only from the day after it's due). Grouped by ref
+    // so a single stale line item on an otherwise-future order can't misfire.
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const pendingRefGroups = new Map<string, typeof orderJobs>();
+    orderJobs.forEach((j) => {
+      const group = pendingRefGroups.get(j.ref) || [];
+      group.push(j);
+      pendingRefGroups.set(j.ref, group);
+    });
+    let pendingOverdue = 0;
+    pendingRefGroups.forEach((group) => {
+      if (!group.some((j) => j.status === "pending")) return;
+      const openLines = group.filter((j) => j.status !== "delivered" && j.status !== "returned" && j.status !== "cancelled");
+      const dueDateString = getGroupDueDateString(openLines);
+      if (!dueDateString) return;
+      const dueDate = new Date(dueDateString);
+      if (Number.isNaN(dueDate.getTime())) return;
+      dueDate.setHours(0, 0, 0, 0);
+      const daysOverdue = Math.floor((today.getTime() - dueDate.getTime()) / 86400000);
+      if (daysOverdue > 0) pendingOverdue++;
     });
 
     const isThisWeek = (dateString: string | undefined) => {
