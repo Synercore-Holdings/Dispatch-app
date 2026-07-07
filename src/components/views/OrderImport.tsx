@@ -258,10 +258,13 @@ const rowToOrder = (headers: string[], row: any[], i: number): ImportedOrder | n
     safeStr(coalesce(row, idx["warehouse"])) ??
     safeStr(coalesce(row, warehouseIdx));
 
-  // PTA deployment: import only rows that explicitly belong to Pretoria warehouses.
-  if (!warehouse || !isPtaWarehouse(warehouse)) {
+  // Skip rows tied to internal/non-dispatch Pretoria warehouses (handled by the separate PTA deployment).
+  if (warehouse && isPtaWarehouse(warehouse)) {
     return null;
   }
+
+  // Don't use "K58 Warehouse" as a warehouse value — it's the default pickup, not a warehouse
+  if (warehouse === "K58 Warehouse") warehouse = undefined;
 
   // Pickup can be same as warehouse or a different field
   const pickup = warehouse ?? safeStr(coalesce(row, pickupIdx)) ?? DEFAULT_PICKUP;
@@ -362,11 +365,11 @@ export const OrderImport: React.FC = () => {
   const [isPurgingIgnored, setIsPurgingIgnored] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Existing customer orders outside this deployment's PTA scope.
+  // Existing orders that match the ignored-warehouse list (legacy rows imported before the filter)
   const ignoredWarehouseJobIds = useMemo(() => {
     return jobs
       .filter((j) => j.jobType !== "ibt")
-      .filter((j) => j.warehouse && !isPtaWarehouse(j.warehouse))
+      .filter((j) => j.warehouse && isPtaWarehouse(j.warehouse))
       .map((j) => j.id);
   }, [jobs]);
 
@@ -378,8 +381,8 @@ export const OrderImport: React.FC = () => {
     }
 
     const ok = await confirm({
-      title: "Remove Non-PTA Orders?",
-      message: `This will permanently delete ${ignoredWarehouseJobIds.length} order${ignoredWarehouseJobIds.length === 1 ? "" : "s"} assigned to warehouses outside the four PTA locations. This cannot be undone.`,
+      title: "Remove Ignored Warehouse Orders?",
+      message: `This will permanently delete ${ignoredWarehouseJobIds.length} order${ignoredWarehouseJobIds.length === 1 ? "" : "s"} assigned to internal storage locations (Pretoria). This cannot be undone.`,
       type: "danger",
       confirmText: "Delete orders",
     });
@@ -661,7 +664,7 @@ export const OrderImport: React.FC = () => {
               onClick={purgeIgnoredWarehouseOrders}
               disabled={isPurgingIgnored}
               className="text-sm text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 hover:border-red-300"
-              title="Remove customer orders assigned to warehouses outside PTA"
+              title="Remove customer orders assigned to internal storage warehouses"
             >
               {isPurgingIgnored ? (
                 <span className="flex items-center gap-2">
@@ -671,7 +674,7 @@ export const OrderImport: React.FC = () => {
               ) : (
                 <>
                   <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-                  Remove Non-PTA Orders ({ignoredWarehouseJobIds.length})
+                  Remove Ignored Warehouses ({ignoredWarehouseJobIds.length})
                 </>
               )}
             </Button>
