@@ -1,5 +1,5 @@
 import React, { useRef, useState } from "react";
-import { ArrowRightLeft, FileSpreadsheet, Loader2, Receipt, Trash2, Upload } from "lucide-react";
+import { ArrowRightLeft, Download, FileSpreadsheet, Loader2, Receipt, Trash2, Upload } from "lucide-react";
 import * as XLSX from "../../lib/spreadsheet";
 import { dispatchPerformanceAPI, type DispatchUploadInfo, type DispatchUploadKind } from "../../services/api";
 import { useNotification } from "../../context/NotificationContext";
@@ -22,6 +22,8 @@ interface UploadDefinition {
   unit: string;
   parse: (rows: unknown[][]) => ParseResult<Record<string, unknown>>;
   keyOf: (row: Record<string, unknown>) => string;
+  /** Header row plus example rows, downloadable so users can see the expected layout. */
+  template: unknown[][];
 }
 
 const UPLOADS: UploadDefinition[] = [
@@ -33,6 +35,11 @@ const UPLOADS: UploadDefinition[] = [
     unit: "invoice",
     parse: parseInvoiceLines as unknown as UploadDefinition["parse"],
     keyOf: (row) => String(row.invoiceNo),
+    template: [
+      ["Document Date", "Document No", "Customer Name", "Inventory Name", "Warehouse", "Qty", "Unit Price Exclusive", "Total Exclusive", "Total Inclusive"],
+      ["2026-10-01", "INV0001234", "Example Customer (Pty) Ltd", "Product A 25kg", "K58", 40, 520, 20800, 23920],
+      ["2026-10-01", "INV0001234", "Example Customer (Pty) Ltd", "Product B 10kg", "K58", 12, 310, 3720, 4278],
+    ],
   },
   {
     kind: "invoice-register",
@@ -42,6 +49,11 @@ const UPLOADS: UploadDefinition[] = [
     unit: "invoice",
     parse: parseInvoiceRegister as unknown as UploadDefinition["parse"],
     keyOf: (row) => String(row.invoiceNo),
+    template: [
+      ["Invoice No", "Source Sales Order", "Invoice Delivery", "Dispatch Date", "Delivery / Due Date", "Customer", "Branch"],
+      ["INV0001234", "SO0005678", "DN0009012", "2026-10-01", "2026-10-02", "Example Customer (Pty) Ltd", "Johannesburg"],
+      ["INV0001235", "SO0005679", "DN0009013", "2026-10-01", "2026-10-03", "Another Customer CC", "Johannesburg"],
+    ],
   },
   {
     kind: "ibt",
@@ -51,8 +63,19 @@ const UPLOADS: UploadDefinition[] = [
     unit: "IBT",
     parse: parseIbtTransactions as unknown as UploadDefinition["parse"],
     keyOf: (row) => String(row.reference),
+    template: [
+      ["id", "Reference", "TransactionDate", "DocumentType", "InventoryCode", "InventoryName", "WarehouseCode", "QtyIn", "QtyOut"],
+      [1001, "IBT000321", "2026-10-01", "Inter Branch Transfer", "PRD-A25", "Product A 25kg", "K58", 0, 40],
+      [1002, "IBT000321", "2026-10-02", "Inter Branch Transfer", "PRD-A25", "Product A 25kg", "CPT01", 40, 0],
+    ],
   },
 ];
+
+const downloadTemplate = async (def: UploadDefinition) => {
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(def.template), def.title);
+  await XLSX.writeFile(workbook, `${def.kind}-template.xlsx`);
+};
 
 const readSheetRows = async (file: File): Promise<unknown[][]> => {
   const isCsv = /\.(csv|txt|tsv)$/i.test(file.name);
@@ -156,29 +179,40 @@ export const DispatchUploads: React.FC<DispatchUploadsProps> = ({ uploads, onUpl
               <p className="mt-2 truncate text-xs text-gray-500" title={info?.filename}>
                 {info ? `Last: ${info.filename} · ${formatDateTime(info.uploadedAt)}${info.uploadedBy ? ` · ${info.uploadedBy}` : ""}` : "Nothing uploaded yet"}
               </p>
-              {canUpload && (
-                <>
-                  <input
-                    ref={(el) => { inputRefs.current[def.kind] = el; }}
-                    type="file"
-                    accept=".xlsx,.csv"
-                    className="hidden"
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      if (file) void handleFile(def, file);
-                    }}
-                  />
-                  <button
-                    type="button"
-                    disabled={Boolean(busy)}
-                    onClick={() => inputRefs.current[def.kind]?.click()}
-                    className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-resilinc-primary px-3 py-1.5 text-xs font-semibold text-white hover:bg-resilinc-primary-dark disabled:opacity-60"
-                  >
-                    {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-                    {busy || "Upload .xlsx / .csv"}
-                  </button>
-                </>
-              )}
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                {canUpload && (
+                  <>
+                    <input
+                      ref={(el) => { inputRefs.current[def.kind] = el; }}
+                      type="file"
+                      accept=".xlsx,.csv"
+                      className="hidden"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        if (file) void handleFile(def, file);
+                      }}
+                    />
+                    <button
+                      type="button"
+                      disabled={Boolean(busy)}
+                      onClick={() => inputRefs.current[def.kind]?.click()}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-resilinc-primary px-3 py-1.5 text-xs font-semibold text-white hover:bg-resilinc-primary-dark disabled:opacity-60"
+                    >
+                      {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                      {busy || "Upload .xlsx / .csv"}
+                    </button>
+                  </>
+                )}
+                <button
+                  type="button"
+                  onClick={() => void downloadTemplate(def)}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                  title="Download an example file showing the expected columns"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Template
+                </button>
+              </div>
             </div>
           </div>
         );
