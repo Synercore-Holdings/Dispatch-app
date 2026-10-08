@@ -42,7 +42,10 @@ const presetRange = (preset: RangePreset, bounds: { minDate: string; maxDate: st
   }
 };
 
-const selectClass = "rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-900 focus:border-emerald-400 focus:outline-none";
+/** Warehouse lists come back from the API as "K58, CPT01". */
+const splitWarehouses = (value: string) => value.split(",").map((w) => w.trim()).filter(Boolean);
+
+const selectClass ="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-900 focus:border-emerald-400 focus:outline-none";
 
 export const DispatchPerformance: React.FC = () => {
   const [tab, setTab] = useState<Tab>("orders");
@@ -51,6 +54,7 @@ export const DispatchPerformance: React.FC = () => {
   const [customRange, setCustomRange] = useState(() => presetRange("last-3-months", { minDate: "", maxDate: "" }));
   const [branch, setBranch] = useState("");
   const [customer, setCustomer] = useState("");
+  const [warehouse, setWarehouse] = useState("");
   const [summary, setSummary] = useState<DispatchPerformanceSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -75,9 +79,20 @@ export const DispatchPerformance: React.FC = () => {
   const orders = useMemo(() => (summary?.invoices ?? []).map(toDispatchOrder), [summary]);
   const branches = useMemo(() => Array.from(new Set(orders.map((o) => o.branch).filter(Boolean))).sort(), [orders]);
   const customers = useMemo(() => Array.from(new Set(orders.map((o) => o.customer))).sort(), [orders]);
+  const ibts = useMemo(() => summary?.ibts ?? [], [summary]);
+  const warehouses = useMemo(() => Array.from(new Set([
+    ...orders.flatMap((o) => splitWarehouses(o.warehouses)),
+    ...ibts.flatMap((ibt) => [...splitWarehouses(ibt.fromWarehouses), ...splitWarehouses(ibt.toWarehouses)]),
+  ])).sort(), [orders, ibts]);
   const filteredOrders = useMemo(() => orders.filter((o) => (
-    (!branch || o.branch === branch) && (!customer || o.customer === customer)
-  )), [orders, branch, customer]);
+    (!branch || o.branch === branch)
+    && (!customer || o.customer === customer)
+    && (!warehouse || splitWarehouses(o.warehouses).includes(warehouse))
+  )), [orders, branch, customer, warehouse]);
+  const filteredIbts = useMemo(() => (warehouse
+    ? ibts.filter((ibt) => [...splitWarehouses(ibt.fromWarehouses), ...splitWarehouses(ibt.toWarehouses)].includes(warehouse))
+    : ibts
+  ), [ibts, warehouse]);
 
   const handleUploaded = (uploaded: { minDate: string; maxDate: string }) => {
     // If the new file falls outside the current window, widen to show all data.
@@ -120,6 +135,10 @@ export const DispatchPerformance: React.FC = () => {
           <span className="text-xs tabular-nums text-gray-500">{formatIsoDate(range.from)} – {formatIsoDate(range.to)}</span>
         )}
         <SegmentedControl<Granularity> value={granularity} onChange={setGranularity} options={[{ id: "day", label: "Day" }, { id: "week", label: "Week" }, { id: "month", label: "Month" }]} />
+        <select value={warehouse} onChange={(e) => setWarehouse(e.target.value)} className={selectClass} aria-label="Warehouse">
+          <option value="">All warehouses</option>
+          {warehouses.map((w) => <option key={w} value={w}>{w}</option>)}
+        </select>
         {tab === "orders" && (
           <>
             <select value={branch} onChange={(e) => setBranch(e.target.value)} className={selectClass} aria-label="Branch">
@@ -130,12 +149,12 @@ export const DispatchPerformance: React.FC = () => {
               <option value="">All customers</option>
               {customers.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
-            {(branch || customer) && (
-              <button type="button" onClick={() => { setBranch(""); setCustomer(""); }} className="inline-flex items-center gap-1 text-xs font-semibold text-gray-500 hover:text-gray-900">
-                <X className="h-3.5 w-3.5" /> Clear
-              </button>
-            )}
           </>
+        )}
+        {(warehouse || (tab === "orders" && (branch || customer))) && (
+          <button type="button" onClick={() => { setWarehouse(""); setBranch(""); setCustomer(""); }} className="inline-flex items-center gap-1 text-xs font-semibold text-gray-500 hover:text-gray-900">
+            <X className="h-3.5 w-3.5" /> Clear
+          </button>
         )}
         <button type="button" onClick={() => void load(range.from, range.to)} className="ml-auto text-gray-400 hover:text-gray-900" title="Refresh">
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
@@ -149,7 +168,7 @@ export const DispatchPerformance: React.FC = () => {
       ) : tab === "orders" ? (
         <OrdersPanel orders={filteredOrders} from={range.from} to={range.to} granularity={granularity} onSelectCustomer={setCustomer} />
       ) : (
-        <IbtPanel ibts={summary?.ibts ?? []} from={range.from} to={range.to} granularity={granularity} />
+        <IbtPanel ibts={filteredIbts} from={range.from} to={range.to} granularity={granularity} />
       )}
     </div>
   );
