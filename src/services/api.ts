@@ -448,3 +448,104 @@ export const privacyAPI = {
 };
 
 export { API_URL };
+
+// ---------------------------------------------------------------------------
+// Dispatch performance (uploaded invoice / IBT exports)
+// ---------------------------------------------------------------------------
+
+export type DispatchUploadKind = "invoice-lines" | "invoice-register" | "ibt";
+
+export interface DispatchInvoiceSummary {
+  invoiceNo: string;
+  salesOrder: string;
+  deliveryNote: string;
+  branch: string;
+  lineCustomer: string;
+  registerCustomer: string;
+  documentDate: string;
+  dispatchDate: string;
+  dueDate: string;
+  qty: number;
+  totalExcl: number;
+  totalIncl: number;
+  lineCount: number;
+  warehouses: string;
+  hasLines: boolean;
+  hasRegister: boolean;
+}
+
+export interface DispatchIbtSummary {
+  reference: string;
+  transactionDate: string;
+  qty: number;
+  productCount: number;
+  fromWarehouses: string;
+  toWarehouses: string;
+}
+
+export interface DispatchUploadInfo {
+  filename: string;
+  rows: number;
+  uploadedBy: string;
+  uploadedAt: string;
+}
+
+export interface DispatchPerformanceSummary {
+  invoices: DispatchInvoiceSummary[];
+  ibts: DispatchIbtSummary[];
+  bounds: { minDate: string; maxDate: string };
+  uploads: Record<DispatchUploadKind, DispatchUploadInfo | null>;
+}
+
+export interface DispatchInvoiceLineDetail {
+  lineNo: number;
+  inventoryName: string | null;
+  warehouse: string | null;
+  qty: number;
+  unitPriceExcl: number | null;
+  totalExcl: number | null;
+}
+
+export interface DispatchIbtLineDetail {
+  sourceId: string;
+  inventoryCode: string | null;
+  inventoryName: string | null;
+  warehouseCode: string;
+  qtyIn: number;
+  qtyOut: number;
+}
+
+export const dispatchPerformanceAPI = {
+  getSummary: async (from: string, to: string): Promise<DispatchPerformanceSummary> => {
+    const params = new URLSearchParams({ from, to });
+    return fetchAPI<DispatchPerformanceSummary>(`/api/dispatch-performance?${params}`);
+  },
+
+  getInvoiceLines: async (invoiceNo: string): Promise<DispatchInvoiceLineDetail[]> => {
+    const params = new URLSearchParams({ action: "invoice-lines", invoiceNo });
+    return fetchAPI<DispatchInvoiceLineDetail[]>(`/api/dispatch-performance?${params}`);
+  },
+
+  getIbtLines: async (reference: string): Promise<DispatchIbtLineDetail[]> => {
+    const params = new URLSearchParams({ action: "ibt-lines", reference });
+    return fetchAPI<DispatchIbtLineDetail[]>(`/api/dispatch-performance?${params}`);
+  },
+
+  startUpload: async (kind: DispatchUploadKind, filename: string, rows: number): Promise<{ id: string }> => {
+    return fetchAPI<{ id: string }>("/api/dispatch-performance?action=start-upload", {
+      method: "POST",
+      body: JSON.stringify({ kind, filename, rows }),
+    });
+  },
+
+  uploadRows: async (kind: DispatchUploadKind, uploadId: string, rows: unknown[]): Promise<{ rows: number }> => {
+    return fetchAPI<{ rows: number }>(`/api/dispatch-performance?action=${kind}`, {
+      method: "POST",
+      body: JSON.stringify({ uploadId, rows }),
+    });
+  },
+
+  clear: async (kind: DispatchUploadKind): Promise<{ deleted: number }> => {
+    return fetchAPI<{ deleted: number }>(`/api/dispatch-performance?action=clear&kind=${kind}`, { method: "DELETE" });
+  },
+};

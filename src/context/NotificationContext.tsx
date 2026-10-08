@@ -214,7 +214,7 @@ const ConfirmModal: React.FC<{ state: ConfirmState; onClose: () => void }> = ({ 
           </div>
           <div>
             <h3 className="text-lg font-semibold text-gray-900">{state.title}</h3>
-            <p className="text-sm text-gray-600 mt-1">{state.message}</p>
+            <p className="text-sm text-gray-600 mt-1 whitespace-pre-line">{state.message}</p>
           </div>
         </div>
         <div className="flex justify-end gap-3 pt-2">
