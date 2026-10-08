@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { prisma, requireAuth, requireAdmin, setCors, validateOrigin } from "../_lib.js";
+import { prisma, authenticate, authenticateAdmin, setCors, validateOrigin } from "../_lib.js";
 
 // Uploads are chunked by the client; every invoice / IBT reference arrives whole
 // in exactly one chunk, so "delete by key then insert" replaces it cleanly and a
@@ -190,7 +190,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === "OPTIONS") return res.status(200).end();
   if (!validateOrigin(req)) return res.status(403).json({ success: false, error: "Forbidden" });
 
-  const user = requireAuth(req.headers.authorization);
+  const user = await authenticate(req.headers.authorization);
   if (!user) return res.status(401).json({ success: false, error: "Unauthorized" });
 
   const action = req.query.action as string | undefined;
@@ -272,7 +272,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (req.method === "DELETE" && action === "clear") {
-      if (!requireAdmin(req.headers.authorization)) return res.status(403).json({ success: false, error: "Admins only" });
+      if (!(await authenticateAdmin(req.headers.authorization))) return res.status(403).json({ success: false, error: "Admins only" });
       const kind = req.query.kind as UploadKind;
       if (!UPLOAD_KINDS.includes(kind)) return res.status(400).json({ success: false, error: "Unknown upload kind" });
       const deleted = kind === "invoice-lines"
