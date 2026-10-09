@@ -6,6 +6,7 @@ import { formatNumber } from "../../utils/format";
 import { addDays, formatIsoDate, todayIso } from "../../utils/dispatchPerformance";
 import { DUE_SOON_DAYS, countOrders, sumValue, toOutstandingLine, type DueBucket, type OutstandingLine as Line } from "../../utils/outstandingOrders";
 import { Panel, StatTile } from "../dispatch/DispatchUi";
+import { MultiSelect } from "../MultiSelect";
 import { OutstandingUpload } from "../outstanding/OutstandingUpload";
 
 const PAGE_SIZE = 200;
@@ -30,7 +31,7 @@ export const OutstandingOrders: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
-  const [warehouse, setWarehouse] = useState("");
+  const [warehouses, setWarehouses] = useState<string[]>([]);
   const [status, setStatus] = useState("");
   const [customer, setCustomer] = useState("");
   const [due, setDue] = useState<DueFilter>("all");
@@ -65,13 +66,14 @@ export const OutstandingOrders: React.FC = () => {
   // Everything except the due-date chip, so chip counts reflect the other filters.
   const baseFiltered = useMemo(() => {
     const term = search.trim().toLowerCase();
+    const picked = new Set(warehouses);
     return lines.filter((l) => (
-      (!warehouse || l.warehouse === warehouse)
+      (!picked.size || picked.has(l.warehouse))
       && (!status || l.status === status)
       && (!customer || l.customer === customer)
       && (!term || [l.documentNo, l.customer, l.customerCode, l.inventoryCode, l.inventoryDescription].some((v) => v.toLowerCase().includes(term)))
     ));
-  }, [lines, search, warehouse, status, customer]);
+  }, [lines, search, warehouses, status, customer]);
 
   const filtered = useMemo(() => (due === "all" ? baseFiltered : baseFiltered.filter((l) => l.due === due)), [baseFiltered, due]);
 
@@ -141,7 +143,7 @@ export const OutstandingOrders: React.FC = () => {
     { id: "later", label: "Later" },
     { id: "no-date", label: "No delivery date" },
   ];
-  const hasFilters = Boolean(search || warehouse || status || customer);
+  const hasFilters = Boolean(search || warehouses.length || status || customer);
 
   return (
     <div className="space-y-5">
@@ -164,10 +166,7 @@ export const OutstandingOrders: React.FC = () => {
             className="w-full sm:w-56 rounded-lg border border-gray-200 bg-white py-1.5 pl-8 pr-3 text-xs text-gray-900 focus:border-emerald-400 focus:outline-none"
           />
         </div>
-        <select value={warehouse} onChange={(e) => setWarehouse(e.target.value)} className={`${selectClass} max-w-[220px]`} aria-label="Warehouse">
-          <option value="">All warehouses</option>
-          {options.warehouses.map((w) => <option key={w} value={w}>{w}</option>)}
-        </select>
+        <MultiSelect options={options.warehouses} value={warehouses} onChange={setWarehouses} noun="warehouses" className="w-full sm:w-56" />
         <select value={status} onChange={(e) => setStatus(e.target.value)} className={selectClass} aria-label="Status">
           <option value="">All statuses</option>
           {options.statuses.map((s) => <option key={s} value={s}>{s}</option>)}
@@ -177,7 +176,7 @@ export const OutstandingOrders: React.FC = () => {
           {options.customers.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
         {hasFilters && (
-          <button type="button" onClick={() => { setSearch(""); setWarehouse(""); setStatus(""); setCustomer(""); }} className="inline-flex items-center gap-1 text-xs font-semibold text-gray-500 hover:text-gray-900">
+          <button type="button" onClick={() => { setSearch(""); setWarehouses([]); setStatus(""); setCustomer(""); }} className="inline-flex items-center gap-1 text-xs font-semibold text-gray-500 hover:text-gray-900">
             <X className="h-3.5 w-3.5" /> Clear
           </button>
         )}

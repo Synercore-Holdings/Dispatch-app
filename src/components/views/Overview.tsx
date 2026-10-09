@@ -17,6 +17,7 @@ import {
 } from "../../utils/dashboard";
 import { ChartLegend, OnTimeTrendChart, OrdersDispatchedChart, OutstandingByWeekChart, STATUS_COLORS } from "../dispatch/DispatchCharts";
 import { Panel, StatTile } from "../dispatch/DispatchUi";
+import { MultiSelect } from "../MultiSelect";
 
 const ON_TIME_TARGET = 95;
 const LIST_SIZE = 10;
@@ -53,12 +54,15 @@ export const Overview: React.FC<OverviewProps> = ({ onNavigate }) => {
   const [snapshot, setSnapshot] = useState<OutstandingOrdersSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [errors, setErrors] = useState<string[]>([]);
-  const [warehouse, setWarehouseState] = useState(() => {
-    try { return localStorage.getItem(WAREHOUSE_KEY) || ""; } catch { return ""; }
+  const [warehouse, setWarehouseState] = useState<string[]>(() => {
+    try {
+      const stored: unknown = JSON.parse(localStorage.getItem(WAREHOUSE_KEY) || "[]");
+      return Array.isArray(stored) ? stored.filter((w): w is string => typeof w === "string") : [];
+    } catch { return []; }
   });
-  const setWarehouse = (value: string) => {
+  const setWarehouse = (value: string[]) => {
     setWarehouseState(value);
-    try { localStorage.setItem(WAREHOUSE_KEY, value); } catch { /* storage unavailable; keep in memory only */ }
+    try { localStorage.setItem(WAREHOUSE_KEY, JSON.stringify(value)); } catch { /* storage unavailable; keep in memory only */ }
   };
 
   const load = useCallback(async () => {
@@ -87,14 +91,15 @@ export const Overview: React.FC<OverviewProps> = ({ onNavigate }) => {
     ...allIbts.flatMap((i) => [...splitWarehouses(i.fromWarehouses), ...splitWarehouses(i.toWarehouses)]),
     ...allLines.map((l) => l.warehouse).filter(Boolean),
   ])).sort(), [allOrders, allIbts, allLines]);
-  // Ignore a remembered warehouse that no longer appears in the data.
-  const activeWarehouse = warehouseOptions.includes(warehouse) ? warehouse : "";
+  // Ignore remembered warehouses that no longer appear in the data.
+  const activeWarehouses = useMemo(() => warehouse.filter((w) => warehouseOptions.includes(w)), [warehouse, warehouseOptions]);
+  const picked = useMemo(() => (activeWarehouses.length ? new Set(activeWarehouses) : null), [activeWarehouses]);
 
-  const orders = useMemo(() => (activeWarehouse ? allOrders.filter((o) => splitWarehouses(o.warehouses).includes(activeWarehouse)) : allOrders), [allOrders, activeWarehouse]);
-  const ibts = useMemo(() => (activeWarehouse
-    ? allIbts.filter((i) => [...splitWarehouses(i.fromWarehouses), ...splitWarehouses(i.toWarehouses)].includes(activeWarehouse))
-    : allIbts), [allIbts, activeWarehouse]);
-  const lines = useMemo(() => (activeWarehouse ? allLines.filter((l) => l.warehouse === activeWarehouse) : allLines), [allLines, activeWarehouse]);
+  const orders = useMemo(() => (picked ? allOrders.filter((o) => splitWarehouses(o.warehouses).some((w) => picked.has(w))) : allOrders), [allOrders, picked]);
+  const ibts = useMemo(() => (picked
+    ? allIbts.filter((i) => [...splitWarehouses(i.fromWarehouses), ...splitWarehouses(i.toWarehouses)].some((w) => picked.has(w)))
+    : allIbts), [allIbts, picked]);
+  const lines = useMemo(() => (picked ? allLines.filter((l) => picked.has(l.warehouse)) : allLines), [allLines, picked]);
 
   const mtd = useMemo(() => periodTotals(orders, ibts, dates.monthStart, dates.today), [orders, ibts, dates]);
   const prev = useMemo(() => periodTotals(orders, ibts, dates.lastMonthStart, dates.lastMonthSameDay), [orders, ibts, dates]);
@@ -104,7 +109,7 @@ export const Overview: React.FC<OverviewProps> = ({ onNavigate }) => {
   const customersOverdue = useMemo(() => overdueByCustomer(lines), [lines]);
   const lateDispatches = useMemo(() => recentLateDispatches(orders), [orders]);
   const warehouses = useMemo(() => warehouseBreakdown(orders, ibts, lines, dates.monthStart, dates.today)
-    .filter((w) => !activeWarehouse || w.warehouse === activeWarehouse), [orders, ibts, lines, dates, activeWarehouse]);
+    .filter((w) => !picked || picked.has(w.warehouse)), [orders, ibts, lines, dates, picked]);
 
   const overdueLines = lines.filter((l) => l.due === "overdue");
   const dueSoonLines = lines.filter((l) => l.due === "due-soon");
@@ -128,19 +133,11 @@ export const Overview: React.FC<OverviewProps> = ({ onNavigate }) => {
           <h2 className="text-2xl font-bold text-gray-900">Dashboard</h2>
           <p className="mt-1 text-sm text-gray-500">
             Month to date ({formatIsoDate(dates.monthStart)} – {formatIsoDate(dates.today)}) compared with the same days last month
-            {activeWarehouse ? <> · <span className="font-semibold text-gray-700">{activeWarehouse}</span></> : " · all warehouses"}.
+            {activeWarehouses.length ? <> · <span className="font-semibold text-gray-700">{activeWarehouses.join(", ")}</span></> : " · all warehouses"}.
           </p>
         </div>
         <div className="flex w-full items-center gap-3 sm:w-auto">
-          <select
-            value={activeWarehouse}
-            onChange={(e) => setWarehouse(e.target.value)}
-            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-emerald-400 focus:outline-none sm:w-64"
-            aria-label="Warehouse"
-          >
-            <option value="">All warehouses</option>
-            {warehouseOptions.map((w) => <option key={w} value={w}>{w}</option>)}
-          </select>
+          <MultiSelect options={warehouseOptions} value={activeWarehouses} onChange={setWarehouse} noun="warehouses" className="w-full sm:w-64" />
           <button type="button" onClick={() => void load()} className="text-gray-400 hover:text-gray-900" title="Refresh">
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
           </button>

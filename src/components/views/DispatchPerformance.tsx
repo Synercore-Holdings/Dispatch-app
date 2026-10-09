@@ -6,6 +6,7 @@ import { DispatchUploads } from "../dispatch/DispatchUploads";
 import { OrdersPanel } from "../dispatch/OrdersPanel";
 import { IbtPanel } from "../dispatch/IbtPanel";
 import { SegmentedControl } from "../dispatch/DispatchUi";
+import { MultiSelect } from "../MultiSelect";
 
 type RangePreset = "this-month" | "last-month" | "last-3-months" | "ytd" | "all" | "custom";
 type Tab = "orders" | "ibt";
@@ -54,7 +55,7 @@ export const DispatchPerformance: React.FC = () => {
   const [customRange, setCustomRange] = useState(() => presetRange("last-3-months", { minDate: "", maxDate: "" }));
   const [branch, setBranch] = useState("");
   const [customer, setCustomer] = useState("");
-  const [warehouse, setWarehouse] = useState("");
+  const [selectedWarehouses, setSelectedWarehouses] = useState<string[]>([]);
   const [summary, setSummary] = useState<DispatchPerformanceSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -84,15 +85,16 @@ export const DispatchPerformance: React.FC = () => {
     ...orders.flatMap((o) => splitWarehouses(o.warehouses)),
     ...ibts.flatMap((ibt) => [...splitWarehouses(ibt.fromWarehouses), ...splitWarehouses(ibt.toWarehouses)]),
   ])).sort(), [orders, ibts]);
+  const picked = useMemo(() => (selectedWarehouses.length ? new Set(selectedWarehouses) : null), [selectedWarehouses]);
   const filteredOrders = useMemo(() => orders.filter((o) => (
     (!branch || o.branch === branch)
     && (!customer || o.customer === customer)
-    && (!warehouse || splitWarehouses(o.warehouses).includes(warehouse))
-  )), [orders, branch, customer, warehouse]);
-  const filteredIbts = useMemo(() => (warehouse
-    ? ibts.filter((ibt) => [...splitWarehouses(ibt.fromWarehouses), ...splitWarehouses(ibt.toWarehouses)].includes(warehouse))
+    && (!picked || splitWarehouses(o.warehouses).some((w) => picked.has(w)))
+  )), [orders, branch, customer, picked]);
+  const filteredIbts = useMemo(() => (picked
+    ? ibts.filter((ibt) => [...splitWarehouses(ibt.fromWarehouses), ...splitWarehouses(ibt.toWarehouses)].some((w) => picked.has(w)))
     : ibts
-  ), [ibts, warehouse]);
+  ), [ibts, picked]);
 
   const handleUploaded = (uploaded: { minDate: string; maxDate: string }) => {
     // If the new file falls outside the current window, widen to show all data.
@@ -135,10 +137,7 @@ export const DispatchPerformance: React.FC = () => {
           <span className="text-xs tabular-nums text-gray-500">{formatIsoDate(range.from)} – {formatIsoDate(range.to)}</span>
         )}
         <SegmentedControl<Granularity> value={granularity} onChange={setGranularity} options={[{ id: "day", label: "Day" }, { id: "week", label: "Week" }, { id: "month", label: "Month" }]} />
-        <select value={warehouse} onChange={(e) => setWarehouse(e.target.value)} className={selectClass} aria-label="Warehouse">
-          <option value="">All warehouses</option>
-          {warehouses.map((w) => <option key={w} value={w}>{w}</option>)}
-        </select>
+        <MultiSelect options={warehouses} value={selectedWarehouses} onChange={setSelectedWarehouses} noun="warehouses" className="w-full sm:w-48" />
         {tab === "orders" && (
           <>
             <select value={branch} onChange={(e) => setBranch(e.target.value)} className={selectClass} aria-label="Branch">
@@ -151,8 +150,8 @@ export const DispatchPerformance: React.FC = () => {
             </select>
           </>
         )}
-        {(warehouse || (tab === "orders" && (branch || customer))) && (
-          <button type="button" onClick={() => { setWarehouse(""); setBranch(""); setCustomer(""); }} className="inline-flex items-center gap-1 text-xs font-semibold text-gray-500 hover:text-gray-900">
+        {(selectedWarehouses.length > 0 || (tab === "orders" && (branch || customer))) && (
+          <button type="button" onClick={() => { setSelectedWarehouses([]); setBranch(""); setCustomer(""); }} className="inline-flex items-center gap-1 text-xs font-semibold text-gray-500 hover:text-gray-900">
             <X className="h-3.5 w-3.5" /> Clear
           </button>
         )}
