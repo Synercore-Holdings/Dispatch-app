@@ -9,50 +9,50 @@ datasource db {
 }
 
 model Job {
-  id        String   @id @default(uuid())
-  ref       String   @db.VarChar(255)
-  customer  String   @db.VarChar(255)
-  pickup    String   @db.VarChar(255)
-  dropoff   String   @db.VarChar(255)
-  warehouse String?  @db.VarChar(255)
+  id        String  @id @default(uuid())
+  ref       String  @db.VarChar(255)
+  customer  String  @db.VarChar(255)
+  pickup    String  @db.VarChar(255)
+  dropoff   String  @db.VarChar(255)
+  warehouse String? @db.VarChar(255)
 
-  priority  String   @db.VarChar(50)
-  status    String   @db.VarChar(50)
-  jobType     String   @default("order") @db.VarChar(50)
-  serviceType      String?  @db.VarChar(50)   // "delivery" or "collection"
-  transportService String?  @db.VarChar(50)   // "express", "economy", "outline"
-  truckSize        String?  @db.VarChar(50)   // "1ton", "4ton", "8ton", "6m", "12m", "superlink"
-  etd              String?  @db.VarChar(255)  // Estimated Time of Departure
+  priority         String  @db.VarChar(50)
+  status           String  @db.VarChar(50)
+  jobType          String  @default("order") @db.VarChar(50)
+  serviceType      String? @db.VarChar(50) // "delivery" or "collection"
+  transportService String? @db.VarChar(50) // "express", "economy", "outline"
+  truckSize        String? @db.VarChar(50) // "1ton", "4ton", "8ton", "6m", "12m", "superlink"
+  etd              String? @db.VarChar(255) // Estimated Time of Departure
 
-  pallets          Int?
-  outstandingQty   Int?
-  totalExclVat     Float?
-  sourceCreatedDate String?  @db.VarChar(255)
-  sourceCreatedBy   String?  @db.VarChar(255)
+  pallets           Int?
+  outstandingQty    Int?
+  totalExclVat      Float?
+  sourceCreatedDate String? @db.VarChar(255)
+  sourceCreatedBy   String? @db.VarChar(255)
 
-  eta                String?   @db.VarChar(255)
-  scheduledAt        String?   @db.VarChar(255)
-  dispatchedAt       String?   @db.VarChar(255)
-  actualDeliveryAt   String?   @db.VarChar(255)
-  returnedAt         String?   @db.VarChar(255)
-  returnReason       String?   @db.Text
-  returnedPallets    Int?
-  returnNotes        String?   @db.Text
-  exceptionReason    String?   @db.Text
-  overdueReason      String?   @db.Text
+  eta              String? @db.VarChar(255)
+  scheduledAt      String? @db.VarChar(255)
+  dispatchedAt     String? @db.VarChar(255)
+  actualDeliveryAt String? @db.VarChar(255)
+  returnedAt       String? @db.VarChar(255)
+  returnReason     String? @db.Text
+  returnedPallets  Int?
+  returnNotes      String? @db.Text
+  exceptionReason  String? @db.Text
+  overdueReason    String? @db.Text
 
-  transporterBooked  Boolean?  @default(false)
-  orderPicked        Boolean?  @default(false)
-  coaAvailable       Boolean?  @default(false)
-  hasFlowbin         Boolean?  @default(false)
+  transporterBooked Boolean? @default(false)
+  orderPicked       Boolean? @default(false)
+  coaAvailable      Boolean? @default(false)
+  hasFlowbin        Boolean? @default(false)
 
-  driverId  String?  @db.VarChar(255)
-  driver    Driver?  @relation(fields: [driverId], references: [id], onDelete: SetNull)
+  driverId String? @db.VarChar(255)
+  driver   Driver? @relation(fields: [driverId], references: [id], onDelete: SetNull)
 
-  notes          String?  @db.Text
-  internalNotes  String?  @db.Text
+  notes         String? @db.Text
+  internalNotes String? @db.Text
 
-  createdById String?  @db.VarChar(255)
+  createdById String? @db.VarChar(255)
 
   flowbinBatches FlowbinBatch[]
 
@@ -74,17 +74,17 @@ model Job {
 }
 
 model Driver {
-  id           String   @id @default(uuid())
-  name         String   @db.VarChar(255)
-  callsign     String   @unique @db.VarChar(50)
-  location     String   @db.VarChar(255)
+  id           String  @id @default(uuid())
+  name         String  @db.VarChar(255)
+  callsign     String  @unique @db.VarChar(50)
+  location     String  @db.VarChar(255)
   capacity     Int
-  assignedJobs Int      @default(0)
-  status       String   @db.VarChar(50)
-  phone        String?  @db.VarChar(50)
-  email        String?  @db.VarChar(255)
+  assignedJobs Int     @default(0)
+  status       String  @db.VarChar(50)
+  phone        String? @db.VarChar(50)
+  email        String? @db.VarChar(255)
 
-  jobs         Job[]
+  jobs Job[]
 
   @@index([status])
   @@index([name])
@@ -92,37 +92,37 @@ model Driver {
 }
 
 model AfricaExportShipment {
-  id                    String   @id @default(uuid())
-  ref                   String   @unique @db.VarChar(255)
-  customer              String   @db.VarChar(255)
-  destinationCountry    String?  @db.VarChar(255)
-  hsCode                String?  @db.VarChar(500)
-  productType           String?  @db.Text
-  incoterm              String   @default("FCA") @db.VarChar(50)
-  transportMode         String   @default("Road") @db.VarChar(50)
-  preferenceScheme      String   @default("To confirm") @db.VarChar(100)
-  destinationAgent      String?  @db.Text
-  etd                   String?  @db.VarChar(255)
-  eta                   String?  @db.VarChar(255)
-  customsBufferDays     Int      @default(2)
-  queuePosition         Int      @default(0)
-  quantity              Float    @default(0)
-  pallets               Int      @default(0)
-  status                String   @default("pending") @db.VarChar(50)
-  assignedTransporterId String?  @db.VarChar(255)
+  id                    String                   @id @default(uuid())
+  ref                   String                   @unique @db.VarChar(255)
+  customer              String                   @db.VarChar(255)
+  destinationCountry    String?                  @db.VarChar(255)
+  hsCode                String?                  @db.VarChar(500)
+  productType           String?                  @db.Text
+  incoterm              String                   @default("FCA") @db.VarChar(50)
+  transportMode         String                   @default("Road") @db.VarChar(50)
+  preferenceScheme      String                   @default("To confirm") @db.VarChar(100)
+  destinationAgent      String?                  @db.Text
+  etd                   String?                  @db.VarChar(255)
+  eta                   String?                  @db.VarChar(255)
+  customsBufferDays     Int                      @default(2)
+  queuePosition         Int                      @default(0)
+  quantity              Float                    @default(0)
+  pallets               Int                      @default(0)
+  status                String                   @default("pending") @db.VarChar(50)
+  assignedTransporterId String?                  @db.VarChar(255)
   assignedTransporter   AfricaExportTransporter? @relation(fields: [assignedTransporterId], references: [id], onDelete: SetNull)
-  lastCheckedAt         String?  @db.VarChar(255)
-  notes                 String?  @db.Text
-  documents             Json     @default("{}")
-  documentDetails       Json     @default("{}")
-  productLines          Json     @default("[]")
-  history               Json     @default("[]")
-  archived              Boolean  @default(false)
-  dispatchApprovedAt    String?  @db.VarChar(255)
-  dispatchApprovedBy    String?  @db.VarChar(255)
-  createdById           String?  @db.VarChar(255)
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  lastCheckedAt         String?                  @db.VarChar(255)
+  notes                 String?                  @db.Text
+  documents             Json                     @default("{}")
+  documentDetails       Json                     @default("{}")
+  productLines          Json                     @default("[]")
+  history               Json                     @default("[]")
+  archived              Boolean                  @default(false)
+  dispatchApprovedAt    String?                  @db.VarChar(255)
+  dispatchApprovedBy    String?                  @db.VarChar(255)
+  createdById           String?                  @db.VarChar(255)
+  createdAt             DateTime                 @default(now())
+  updatedAt             DateTime                 @updatedAt
 
   @@index([status])
   @@index([archived])
@@ -151,15 +151,15 @@ model AfricaExportCountryRule {
 }
 
 model AfricaExportTransporter {
-  id        String   @id @default(uuid())
-  name      String   @db.VarChar(255)
-  route     String?  @db.VarChar(255)
-  contact   String?  @db.Text
-  capacity  Int      @default(0)
-  status    String   @default("available") @db.VarChar(50)
+  id        String                 @id @default(uuid())
+  name      String                 @db.VarChar(255)
+  route     String?                @db.VarChar(255)
+  contact   String?                @db.Text
+  capacity  Int                    @default(0)
+  status    String                 @default("available") @db.VarChar(50)
   shipments AfricaExportShipment[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime               @default(now())
+  updatedAt DateTime               @updatedAt
 
   @@index([status])
   @@index([name])
@@ -183,17 +183,17 @@ model User {
 }
 
 model Message {
-  id          String   @id @default(uuid())
-  senderId    String   @db.VarChar(255)
-  senderName  String   @db.VarChar(255)
-  subject     String   @db.VarChar(255)
-  body        String   @db.Text
-  jobRef      String?  @db.VarChar(255)  // optional link to an order
-  priority    String   @default("normal") @db.VarChar(50)  // "normal" or "urgent"
-  broadcast   Boolean  @default(false)  // sent to all users
-  threadId    String?  @db.VarChar(255)  // links replies to original message
-  recipients  MessageRecipient[]
-  createdAt   DateTime @default(now())
+  id         String             @id @default(uuid())
+  senderId   String             @db.VarChar(255)
+  senderName String             @db.VarChar(255)
+  subject    String             @db.VarChar(255)
+  body       String             @db.Text
+  jobRef     String?            @db.VarChar(255) // optional link to an order
+  priority   String             @default("normal") @db.VarChar(50) // "normal" or "urgent"
+  broadcast  Boolean            @default(false) // sent to all users
+  threadId   String?            @db.VarChar(255) // links replies to original message
+  recipients MessageRecipient[]
+  createdAt  DateTime           @default(now())
 
   @@index([senderId])
   @@index([jobRef])
@@ -203,13 +203,13 @@ model Message {
 }
 
 model MessageRecipient {
-  id         String   @id @default(uuid())
-  messageId  String   @db.VarChar(255)
-  message    Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  userId     String   @db.VarChar(255)
-  username   String   @db.VarChar(255)
-  readAt     DateTime?
-  createdAt  DateTime @default(now())
+  id        String    @id @default(uuid())
+  messageId String    @db.VarChar(255)
+  message   Message   @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId    String    @db.VarChar(255)
+  username  String    @db.VarChar(255)
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
 
   @@unique([messageId, userId])
   @@index([userId])
@@ -218,16 +218,16 @@ model MessageRecipient {
 }
 
 model FlowbinBatch {
-  id           String    @id @default(uuid())
-  jobId        String    @db.VarChar(255)
-  job          Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  batchNumber       String    @db.VarChar(255)
-  quantity          Int
-  quantityReturned  Int?
-  returnedAt        DateTime?
-  returnNotes       String?   @db.Text
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  id               String    @id @default(uuid())
+  jobId            String    @db.VarChar(255)
+  job              Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  batchNumber      String    @db.VarChar(255)
+  quantity         Int
+  quantityReturned Int?
+  returnedAt       DateTime?
+  returnNotes      String?   @db.Text
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   @@index([jobId])
   @@map("flowbin_batches")
@@ -315,4 +315,111 @@ model InvoiceReconciliationAudit {
   @@index([entityType, entityKey])
   @@index([createdAt])
   @@map("invoice_reconciliation_audits")
+}
+
+// ---------------------------------------------------------------------------
+// Dispatch performance (uploaded ERP exports)
+// ---------------------------------------------------------------------------
+
+// One row per invoice line from the "invoice lines" export
+// (Document Date, Document No, Customer, Inventory, Warehouse, Qty, Totals).
+model DispatchInvoiceLine {
+  id            String   @id @default(uuid())
+  invoiceNo     String   @db.VarChar(100)
+  lineNo        Int
+  documentDate  String   @db.VarChar(10) // YYYY-MM-DD
+  customer      String?  @db.VarChar(500)
+  inventoryName String?  @db.VarChar(500)
+  warehouse     String?  @db.VarChar(255)
+  qty           Float    @default(0)
+  unitPriceExcl Float?
+  totalExcl     Float?
+  totalIncl     Float?
+  uploadId      String?  @db.VarChar(255)
+  createdAt     DateTime @default(now())
+
+  @@unique([invoiceNo, lineNo])
+  @@index([documentDate])
+  @@index([customer])
+  @@map("dispatch_invoice_lines")
+}
+
+// One row per invoice from the "invoice register" export
+// (Invoice No, Source Sales Order, Invoice Delivery, Dispatch Date, Delivery / Due Date, Customer, Branch).
+model DispatchInvoice {
+  id           String   @id @default(uuid())
+  invoiceNo    String   @unique @db.VarChar(100)
+  salesOrder   String?  @db.VarChar(100)
+  deliveryNote String?  @db.VarChar(100)
+  dispatchDate String?  @db.VarChar(10) // YYYY-MM-DD
+  dueDate      String?  @db.VarChar(10) // YYYY-MM-DD
+  customer     String?  @db.VarChar(500)
+  branch       String?  @db.VarChar(255)
+  uploadId     String?  @db.VarChar(255)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([dispatchDate])
+  @@index([dueDate])
+  @@index([salesOrder])
+  @@map("dispatch_invoices")
+}
+
+// One row per warehouse movement from the IBT transactions export.
+// Each transfer line appears twice: QtyOut at the sending warehouse, QtyIn at the receiving one.
+model DispatchIbtLine {
+  id              String   @id @default(uuid())
+  reference       String   @db.VarChar(100)
+  sourceId        String   @db.VarChar(100)
+  transactionDate String   @db.VarChar(10) // YYYY-MM-DD
+  inventoryCode   String?  @db.VarChar(100)
+  inventoryName   String?  @db.VarChar(500)
+  warehouseCode   String   @db.VarChar(100)
+  qtyIn           Float    @default(0)
+  qtyOut          Float    @default(0)
+  uploadId        String?  @db.VarChar(255)
+  createdAt       DateTime @default(now())
+
+  @@unique([reference, sourceId, warehouseCode])
+  @@index([transactionDate])
+  @@index([reference])
+  @@map("dispatch_ibt_lines")
+}
+
+model DispatchUpload {
+  id         String   @id @default(uuid())
+  kind       String   @db.VarChar(50) // invoice-lines | invoice-register | ibt
+  filename   String   @db.VarChar(1000)
+  rows       Int      @default(0)
+  uploadedBy String?  @db.VarChar(255)
+  uploadedAt DateTime @default(now())
+
+  @@index([kind, uploadedAt])
+  @@map("dispatch_uploads")
+}
+
+// One row per open sales order line from the "outstanding sales orders" export
+// (Document No, Customer, Status, Delivery Date, Inventory, Warehouse, Outstanding Qty, Totals).
+// Each upload is a full snapshot: the newest completed upload replaces everything before it.
+model OutstandingOrderLine {
+  id                   String   @id @default(uuid())
+  uploadId             String   @db.VarChar(255)
+  company              String?  @db.VarChar(255)
+  documentNo           String   @db.VarChar(100)
+  customerCode         String?  @db.VarChar(100)
+  customerName         String?  @db.VarChar(500)
+  status               String?  @db.VarChar(100)
+  deliveryDate         String?  @db.VarChar(10) // YYYY-MM-DD
+  inventoryCode        String?  @db.VarChar(100)
+  inventoryDescription String?  @db.VarChar(500)
+  warehouse            String?  @db.VarChar(255)
+  outstandingQty       Float    @default(0)
+  unitPrice            Float?
+  totalExcl            Float?
+  dateCreated          String?  @db.VarChar(10) // YYYY-MM-DD
+  createdBy            String?  @db.VarChar(255)
+  createdAt            DateTime @default(now())
+
+  @@index([uploadId])
+  @@map("outstanding_order_lines")
 }

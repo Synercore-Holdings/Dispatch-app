@@ -1,7 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { PrismaClient } from "@prisma/client";
-import jwt from "jsonwebtoken";
-import { validateOrigin } from "../_lib.js";
+import { authenticate, validateOrigin } from "../_lib.js";
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 const prisma = globalForPrisma.prisma || new PrismaClient();
@@ -15,11 +14,10 @@ function setCors(res: VercelResponse, req: VercelRequest) {
 
 interface JwtPayload { id: string; username: string; email: string; role: string }
 
-function requireAuth(authHeader: string | undefined, res: VercelResponse): JwtPayload | null {
+async function requireAuth(authHeader: string | undefined, res: VercelResponse): Promise<JwtPayload | null> {
   const secret = process.env.JWT_SECRET;
   if (!secret) { res.status(500).json({ success: false, error: "Server configuration error" }); return null; }
-  if (!authHeader || !authHeader.startsWith("Bearer ")) return null;
-  try { return jwt.verify(authHeader.slice(7), secret) as JwtPayload; } catch { return null; }
+  return authenticate(authHeader);
 }
 
 const formatDate = (d: unknown) => d instanceof Date ? d.toISOString() : d;
@@ -29,7 +27,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === "OPTIONS") return res.status(200).end();
   if (!validateOrigin(req)) return res.status(403).json({ success: false, error: "Forbidden" });
 
-  const user = requireAuth(req.headers.authorization, res);
+  const user = await requireAuth(req.headers.authorization, res);
   if (!user) return res.headersSent ? undefined : res.status(401).json({ success: false, error: "Unauthorized" });
 
   // GET — messages for current user (inbox)

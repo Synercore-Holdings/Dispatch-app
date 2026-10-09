@@ -10,9 +10,9 @@ const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 export const prisma: PrismaClient =
   globalForPrisma.prisma || new PrismaClient();
 
-if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.prisma = prisma;
-}
+// Always share the instance: handlers that build their own client via
+// `globalForPrisma.prisma || new PrismaClient()` then reuse this pool.
+globalForPrisma.prisma = prisma;
 
 // ---------------------------------------------------------------------------
 // JWT payload type
@@ -78,6 +78,28 @@ export function requireAdmin(
     return null;
   }
   return user;
+}
+
+/**
+ * Verify the token, then load the user from the database so that deleted,
+ * erased or re-roled users take effect immediately rather than when their
+ * 8-hour token expires. Returns the current user, or `null`.
+ */
+export async function authenticate(authHeader: string | undefined): Promise<JwtPayload | null> {
+  const claims = requireAuth(authHeader);
+  if (!claims?.id) return null;
+  const user = await prisma.user.findUnique({
+    where: { id: claims.id },
+    select: { id: true, username: true, email: true, role: true, password: true },
+  });
+  // Erased users keep their row with an empty password.
+  if (!user || !user.password) return null;
+  return { id: user.id, username: user.username, email: user.email, role: user.role };
+}
+
+export async function authenticateAdmin(authHeader: string | undefined): Promise<JwtPayload | null> {
+  const user = await authenticate(authHeader);
+  return user?.role === "admin" ? user : null;
 }
 
 // ---------------------------------------------------------------------------

@@ -1,8 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { PrismaClient } from "@prisma/client";
-import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
-import { validateOrigin } from "../_lib.js";
+import { authenticate, validateOrigin } from "../_lib.js";
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 const prisma = globalForPrisma.prisma || new PrismaClient();
@@ -16,15 +15,14 @@ function setCors(res: VercelResponse, req: VercelRequest) {
 
 interface JwtPayload { id: string; username: string; email: string; role: string }
 
-function requireAuth(authHeader: string | undefined, res: VercelResponse): JwtPayload | null {
+async function requireAuth(authHeader: string | undefined, res: VercelResponse): Promise<JwtPayload | null> {
   const secret = process.env.JWT_SECRET;
   if (!secret) { res.status(500).json({ success: false, error: "Server configuration error" }); return null; }
-  if (!authHeader || !authHeader.startsWith("Bearer ")) return null;
-  try { return jwt.verify(authHeader.slice(7), secret) as JwtPayload; } catch { return null; }
+  return authenticate(authHeader);
 }
 
-function requireAdmin(authHeader: string | undefined, res: VercelResponse): JwtPayload | null {
-  const user = requireAuth(authHeader, res);
+async function requireAdmin(authHeader: string | undefined, res: VercelResponse): Promise<JwtPayload | null> {
+  const user = await requireAuth(authHeader, res);
   if (!user || user.role !== "admin") return null;
   return user;
 }
@@ -38,7 +36,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // --- Single user operations (when ?id=xxx is provided, admin only) ---
   if (id) {
-    const caller = requireAdmin(req.headers.authorization, res);
+    const caller = await requireAdmin(req.headers.authorization, res);
     if (!caller) return res.headersSent ? undefined : res.status(403).json({ success: false, message: "Admin access required" });
 
     if (req.method === "GET") {
@@ -101,11 +99,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // --- Collection operations ---
   // GET — any authenticated user can list users (for recipient picker)
   if (req.method === "GET") {
-    const user = requireAuth(req.headers.authorization, res);
+    const user = await requireAuth(req.headers.authorization, res);
     if (!user) return res.headersSent ? undefined : res.status(401).json({ success: false, message: "Unauthorized" });
     try {
+      // Only admins need email addresses; everyone else just picks recipients by name.
+      const isAdmin = user.role === "admin";
       const users = await prisma.user.findMany({
-        select: { id: true, username: true, email: true, role: true, createdAt: true, lastSeenAt: true },
+        select: { id: true, username: true, email: isAdmin, role: true, createdAt: true, lastSeenAt: true },
       });
       return res.json({ success: true, data: users });
     } catch (error) {
@@ -115,7 +115,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // POST — admin only
-  const caller = requireAdmin(req.headers.authorization, res);
+  const caller = await requireAdmin(req.headers.authorization, res);
   if (!caller) return res.headersSent ? undefined : res.status(403).json({ success: false, message: "Admin access required" });
 
   if (req.method === "POST") {

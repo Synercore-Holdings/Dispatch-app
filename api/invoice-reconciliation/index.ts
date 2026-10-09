@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { prisma, requireAuth, setCors, validateOrigin, MAX_BATCH_SIZE } from "../_lib.js";
+import { prisma, authenticate, setCors, validateOrigin, MAX_BATCH_SIZE } from "../_lib.js";
 
 const MAX_TEXT = 5000;
 const MAX_STRING = 1000;
@@ -120,7 +120,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === "OPTIONS") return res.status(200).end();
   if (!validateOrigin(req)) return res.status(403).json({ success: false, error: "Forbidden" });
 
-  const user = requireAuth(req.headers.authorization);
+  const user = await authenticate(req.headers.authorization);
   if (!user) return res.status(401).json({ success: false, error: "Unauthorized" });
 
   const action = req.query.action as string | undefined;

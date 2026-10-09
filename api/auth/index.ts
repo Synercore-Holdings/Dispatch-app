@@ -115,14 +115,17 @@ async function handleVerify(req: VercelRequest, res: VercelResponse) {
   }
   try {
     const token = authHeader.substring(7);
-    const decoded = jwt.verify(token, getJWTSecret()) as { id: string; username: string; email: string; role: string };
-    await prisma.user.update({
+    const decoded = jwt.verify(token, getJWTSecret()) as { id: string };
+    // Return the stored role, not the token's, so role changes apply immediately.
+    const user = await prisma.user.update({
       where: { id: decoded.id },
       data: { lastSeenAt: new Date() },
+      select: { id: true, username: true, email: true, role: true, password: true },
     });
+    if (!user.password) throw new Error("User erased");
     return res.json({
       success: true,
-      user: { id: decoded.id, username: decoded.username, email: decoded.email, role: decoded.role },
+      user: { id: user.id, username: user.username, email: user.email, role: user.role },
     });
   } catch {
     return res.status(401).json({ success: false, message: "Invalid or expired token" });
@@ -285,7 +288,8 @@ async function handleEraseUser(req: VercelRequest, res: VercelResponse) {
   } catch {
     return res.status(401).json({ success: false, message: "Invalid or expired token" });
   }
-  if (caller.role !== "admin") {
+  const callerUser = await prisma.user.findUnique({ where: { id: caller.id }, select: { role: true, password: true } });
+  if (!callerUser?.password || callerUser.role !== "admin") {
     return res.status(403).json({ success: false, message: "Admin access required" });
   }
 
