@@ -3,6 +3,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
   Line,
   LineChart,
   ReferenceLine,
@@ -152,6 +153,50 @@ export const IbtDispatchedChart: React.FC<{ data: IbtPeriodPoint[] }> = ({ data 
         }}
       />
       <Bar dataKey="transfers" name="IBTs" fill={SERIES_BLUE} radius={[4, 4, 0, 0]} maxBarSize={36} />
+    </BarChart>
+  </ResponsiveContainer>
+);
+
+export interface OutstandingWeekPoint {
+  key: string;
+  label: string;
+  rangeLabel: string;
+  value: number;
+  orders: number;
+  tone: "overdue" | "upcoming" | "neutral";
+}
+
+const OUTSTANDING_TONES: Record<OutstandingWeekPoint["tone"], string> = {
+  overdue: STATUS_COLORS.late,
+  upcoming: SERIES_BLUE,
+  neutral: STATUS_COLORS.noDueDate,
+};
+
+export const OutstandingByWeekChart: React.FC<{ data: OutstandingWeekPoint[] }> = ({ data }) => (
+  <ResponsiveContainer width="100%" height={260}>
+    <BarChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 4 }} barCategoryGap="18%">
+      <CartesianGrid vertical={false} stroke={GRID} />
+      <XAxis dataKey="label" {...axisProps} interval={0} minTickGap={0} tick={{ fill: AXIS_TEXT, fontSize: 10 }} />
+      <YAxis {...axisProps} axisLine={false} width={56} tickFormatter={(v: number) => (v >= 1e6 ? `R${(v / 1e6).toFixed(1)}m` : `R${Math.round(v / 1e3)}k`)} />
+      <Tooltip
+        cursor={{ fill: "rgb(var(--color-surface-tertiary))", opacity: 0.6 }}
+        content={({ active, payload }: TooltipProps<OutstandingWeekPoint>) => {
+          const point = active && payload?.[0]?.payload;
+          if (!point) return null;
+          return (
+            <TooltipCard
+              title={point.rangeLabel}
+              rows={[
+                { label: "Outstanding value", value: `R${formatNumber(Math.round(point.value))}`, color: OUTSTANDING_TONES[point.tone] },
+                { label: "Sales orders", value: formatNumber(point.orders) },
+              ]}
+            />
+          );
+        }}
+      />
+      <Bar dataKey="value" name="Outstanding value" radius={[4, 4, 0, 0]} maxBarSize={36}>
+        {data.map((point) => <Cell key={point.key} fill={OUTSTANDING_TONES[point.tone]} />)}
+      </Bar>
     </BarChart>
   </ResponsiveContainer>
 );

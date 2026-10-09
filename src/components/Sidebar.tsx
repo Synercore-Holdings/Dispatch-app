@@ -1,6 +1,7 @@
 import React from "react";
 import {
   BarChart3,
+  LayoutDashboard,
   ClipboardList,
   Settings as SettingsIcon,
   LogOut,
@@ -31,6 +32,7 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
+  { id: "dashboard", icon: LayoutDashboard, label: "Dashboard" },
   { id: "dispatch-performance", icon: BarChart3, label: "Dispatch Performance" },
   { id: "outstanding-orders", icon: ClipboardList, label: "Outstanding Sales Orders" },
 ];

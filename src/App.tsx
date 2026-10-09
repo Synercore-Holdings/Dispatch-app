@@ -9,6 +9,7 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Loader2, Menu } from "lucide-react";
 
 const NAV_TITLES: Record<string, string> = {
+  dashboard: "Dashboard",
   "dispatch-performance": "Dispatch Performance",
   "outstanding-orders": "Outstanding Sales Orders",
   settings: "Settings",
@@ -17,6 +18,7 @@ const NAV_TITLES: Record<string, string> = {
 // The app is now a reporting view over uploaded ERP exports (invoice lines,
 // invoice register, IBT transactions). The previous order-management screens
 // are no longer routed; their code remains in git history / src for reference.
+const Overview = lazy(() => import("./components/views/Overview").then(m => ({ default: m.Overview })));
 const DispatchPerformance = lazy(() => import("./components/views/DispatchPerformance").then(m => ({ default: m.DispatchPerformance })));
 const OutstandingOrders = lazy(() => import("./components/views/OutstandingOrders").then(m => ({ default: m.OutstandingOrders })));
 const SettingsView = lazy(() => import("./components/views/SettingsView").then(m => ({ default: m.SettingsView })));
@@ -34,7 +36,7 @@ type AuthView = "login" | "privacy";
 
 function AppContent() {
   const { isAuthenticated, isLoading } = useAuth();
-  const [activeNavItem, setActiveNavItem] = useState("dispatch-performance");
+  const [activeNavItem, setActiveNavItem] = useState("dashboard");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [authView, setAuthView] = useState<AuthView>("login");
@@ -87,7 +89,7 @@ function AppContent() {
           <div className="mx-auto max-w-[1600px] p-4 sm:p-6 lg:p-8">
             <ErrorBoundary>
               <Suspense fallback={<PageLoader />}>
-                {activeNavItem === "settings" ? <SettingsView /> : activeNavItem === "outstanding-orders" ? <OutstandingOrders /> : <DispatchPerformance />}
+                {activeNavItem === "settings" ? <SettingsView /> : activeNavItem === "outstanding-orders" ? <OutstandingOrders /> : activeNavItem === "dashboard" ? <Overview onNavigate={setActiveNavItem} /> : <DispatchPerformance />}
               </Suspense>
             </ErrorBoundary>
           </div>

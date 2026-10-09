@@ -3,41 +3,16 @@ import { AlertTriangle, Download, Loader2, RefreshCw, Search, X } from "lucide-r
 import * as XLSX from "../../lib/spreadsheet";
 import { outstandingOrdersAPI, type OutstandingOrdersSnapshot } from "../../services/api";
 import { formatNumber } from "../../utils/format";
-import { addDays, daysBetween, formatIsoDate, todayIso } from "../../utils/dispatchPerformance";
+import { addDays, formatIsoDate, todayIso } from "../../utils/dispatchPerformance";
+import { DUE_SOON_DAYS, countOrders, sumValue, toOutstandingLine, type DueBucket, type OutstandingLine as Line } from "../../utils/outstandingOrders";
 import { Panel, StatTile } from "../dispatch/DispatchUi";
 import { OutstandingUpload } from "../outstanding/OutstandingUpload";
 
 const PAGE_SIZE = 200;
-const DUE_SOON_DAYS = 7;
 const formatRand = (value: number) => `R${formatNumber(Math.round(value))}`;
 const selectClass = "rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-900 focus:border-emerald-400 focus:outline-none";
 
-type DueFilter = "all" | "overdue" | "due-soon" | "later" | "no-date";
-
-interface Line {
-  documentNo: string;
-  customer: string;
-  customerCode: string;
-  status: string;
-  deliveryDate: string;
-  inventoryCode: string;
-  inventoryDescription: string;
-  warehouse: string;
-  qty: number;
-  unitPrice: number | null;
-  value: number;
-  dateCreated: string;
-  createdBy: string;
-  /** Days past the delivery date (positive = overdue). Null without a delivery date. */
-  daysOverdue: number | null;
-  due: Exclude<DueFilter, "all">;
-}
-
-const dueOf = (daysOverdue: number | null): Line["due"] => {
-  if (daysOverdue === null) return "no-date";
-  if (daysOverdue > 0) return "overdue";
-  return daysOverdue >= -DUE_SOON_DAYS ? "due-soon" : "later";
-};
+type DueFilter = "all" | DueBucket;
 
 const DueBadge: React.FC<{ line: Line }> = ({ line }) => {
   if (line.due === "overdue") {
@@ -76,26 +51,7 @@ export const OutstandingOrders: React.FC = () => {
   useEffect(() => { void load(); }, [load]);
 
   const today = todayIso();
-  const lines = useMemo<Line[]>(() => (snapshot?.lines ?? []).map((l) => {
-    const daysOverdue = l.deliveryDate ? daysBetween(l.deliveryDate, today) : null;
-    return {
-      documentNo: l.documentNo,
-      customer: l.customerName || l.customerCode || "-",
-      customerCode: l.customerCode || "",
-      status: l.status || "",
-      deliveryDate: l.deliveryDate || "",
-      inventoryCode: l.inventoryCode || "",
-      inventoryDescription: l.inventoryDescription || "",
-      warehouse: l.warehouse || "",
-      qty: l.outstandingQty,
-      unitPrice: l.unitPrice,
-      value: l.totalExcl ?? l.outstandingQty * (l.unitPrice ?? 0),
-      dateCreated: l.dateCreated || "",
-      createdBy: l.createdBy || "",
-      daysOverdue,
-      due: dueOf(daysOverdue),
-    };
-  }), [snapshot, today]);
+  const lines = useMemo(() => (snapshot?.lines ?? []).map((l) => toOutstandingLine(l, today)), [snapshot, today]);
 
   const options = useMemo(() => {
     const uniq = (values: string[]) => Array.from(new Set(values.filter(Boolean))).sort();
@@ -120,8 +76,8 @@ export const OutstandingOrders: React.FC = () => {
   const filtered = useMemo(() => (due === "all" ? baseFiltered : baseFiltered.filter((l) => l.due === due)), [baseFiltered, due]);
 
   const totals = useMemo(() => {
-    const ordersOf = (ls: Line[]) => new Set(ls.map((l) => l.documentNo)).size;
-    const valueOf = (ls: Line[]) => ls.reduce((sum, l) => sum + l.value, 0);
+    const ordersOf = countOrders;
+    const valueOf = sumValue;
     const overdue = baseFiltered.filter((l) => l.due === "overdue");
     const dueSoon = baseFiltered.filter((l) => l.due === "due-soon");
     return {
