@@ -8,7 +8,8 @@ import type { OutstandingWeekPoint } from "../components/dispatch/DispatchCharts
 export const TREND_WEEKS = 12;
 const UPCOMING_WEEKS = 8;
 
-const splitWarehouses = (value: string) => value.split(",").map((w) => w.trim()).filter(Boolean);
+/** Warehouse lists come back from the API as "K58, CPT01". */
+export const splitWarehouses = (value: string) => value.split(",").map((w) => w.trim()).filter(Boolean);
 const inRange = (date: string, from: string, to: string) => Boolean(date) && date >= from && date <= to;
 
 export interface DashboardDates {

@@ -12,6 +12,7 @@ import {
   overdueOrders,
   periodTotals,
   recentLateDispatches,
+  splitWarehouses,
   warehouseBreakdown,
 } from "../../utils/dashboard";
 import { ChartLegend, OnTimeTrendChart, OrdersDispatchedChart, OutstandingByWeekChart, STATUS_COLORS } from "../dispatch/DispatchCharts";
@@ -19,6 +20,7 @@ import { Panel, StatTile } from "../dispatch/DispatchUi";
 
 const ON_TIME_TARGET = 95;
 const LIST_SIZE = 10;
+const WAREHOUSE_KEY = "dashboard_warehouse";
 const formatRand = (value: number) => `R${formatNumber(Math.round(value))}`;
 
 /** "▲ 12% vs 1–9 Sep" style comparison; null when there's nothing to compare against. */
@@ -51,6 +53,13 @@ export const Overview: React.FC<OverviewProps> = ({ onNavigate }) => {
   const [snapshot, setSnapshot] = useState<OutstandingOrdersSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [errors, setErrors] = useState<string[]>([]);
+  const [warehouse, setWarehouseState] = useState(() => {
+    try { return localStorage.getItem(WAREHOUSE_KEY) || ""; } catch { return ""; }
+  });
+  const setWarehouse = (value: string) => {
+    setWarehouseState(value);
+    try { localStorage.setItem(WAREHOUSE_KEY, value); } catch { /* storage unavailable; keep in memory only */ }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -69,9 +78,23 @@ export const Overview: React.FC<OverviewProps> = ({ onNavigate }) => {
 
   useEffect(() => { void load(); }, [load]);
 
-  const orders = useMemo(() => (summary?.invoices ?? []).map(toDispatchOrder), [summary]);
-  const ibts = useMemo(() => summary?.ibts ?? [], [summary]);
-  const lines = useMemo(() => (snapshot?.lines ?? []).map((l) => toOutstandingLine(l, dates.today)), [snapshot, dates]);
+  const allOrders = useMemo(() => (summary?.invoices ?? []).map(toDispatchOrder), [summary]);
+  const allIbts = useMemo(() => summary?.ibts ?? [], [summary]);
+  const allLines = useMemo(() => (snapshot?.lines ?? []).map((l) => toOutstandingLine(l, dates.today)), [snapshot, dates]);
+
+  const warehouseOptions = useMemo(() => Array.from(new Set([
+    ...allOrders.flatMap((o) => splitWarehouses(o.warehouses)),
+    ...allIbts.flatMap((i) => [...splitWarehouses(i.fromWarehouses), ...splitWarehouses(i.toWarehouses)]),
+    ...allLines.map((l) => l.warehouse).filter(Boolean),
+  ])).sort(), [allOrders, allIbts, allLines]);
+  // Ignore a remembered warehouse that no longer appears in the data.
+  const activeWarehouse = warehouseOptions.includes(warehouse) ? warehouse : "";
+
+  const orders = useMemo(() => (activeWarehouse ? allOrders.filter((o) => splitWarehouses(o.warehouses).includes(activeWarehouse)) : allOrders), [allOrders, activeWarehouse]);
+  const ibts = useMemo(() => (activeWarehouse
+    ? allIbts.filter((i) => [...splitWarehouses(i.fromWarehouses), ...splitWarehouses(i.toWarehouses)].includes(activeWarehouse))
+    : allIbts), [allIbts, activeWarehouse]);
+  const lines = useMemo(() => (activeWarehouse ? allLines.filter((l) => l.warehouse === activeWarehouse) : allLines), [allLines, activeWarehouse]);
 
   const mtd = useMemo(() => periodTotals(orders, ibts, dates.monthStart, dates.today), [orders, ibts, dates]);
   const prev = useMemo(() => periodTotals(orders, ibts, dates.lastMonthStart, dates.lastMonthSameDay), [orders, ibts, dates]);
@@ -80,7 +103,8 @@ export const Overview: React.FC<OverviewProps> = ({ onNavigate }) => {
   const topOverdue = useMemo(() => overdueOrders(lines), [lines]);
   const customersOverdue = useMemo(() => overdueByCustomer(lines), [lines]);
   const lateDispatches = useMemo(() => recentLateDispatches(orders), [orders]);
-  const warehouses = useMemo(() => warehouseBreakdown(orders, ibts, lines, dates.monthStart, dates.today), [orders, ibts, lines, dates]);
+  const warehouses = useMemo(() => warehouseBreakdown(orders, ibts, lines, dates.monthStart, dates.today)
+    .filter((w) => !activeWarehouse || w.warehouse === activeWarehouse), [orders, ibts, lines, dates, activeWarehouse]);
 
   const overdueLines = lines.filter((l) => l.due === "overdue");
   const dueSoonLines = lines.filter((l) => l.due === "due-soon");
@@ -103,12 +127,24 @@ export const Overview: React.FC<OverviewProps> = ({ onNavigate }) => {
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Dashboard</h2>
           <p className="mt-1 text-sm text-gray-500">
-            Month to date ({formatIsoDate(dates.monthStart)} – {formatIsoDate(dates.today)}) compared with the same days last month.
+            Month to date ({formatIsoDate(dates.monthStart)} – {formatIsoDate(dates.today)}) compared with the same days last month
+            {activeWarehouse ? <> · <span className="font-semibold text-gray-700">{activeWarehouse}</span></> : " · all warehouses"}.
           </p>
         </div>
-        <button type="button" onClick={() => void load()} className="text-gray-400 hover:text-gray-900" title="Refresh">
-          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-        </button>
+        <div className="flex w-full items-center gap-3 sm:w-auto">
+          <select
+            value={activeWarehouse}
+            onChange={(e) => setWarehouse(e.target.value)}
+            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:border-emerald-400 focus:outline-none sm:w-64"
+            aria-label="Warehouse"
+          >
+            <option value="">All warehouses</option>
+            {warehouseOptions.map((w) => <option key={w} value={w}>{w}</option>)}
+          </select>
+          <button type="button" onClick={() => void load()} className="text-gray-400 hover:text-gray-900" title="Refresh">
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+          </button>
+        </div>
       </div>
 
       {errors.map((e) => <p key={e} className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{e}</p>)}
