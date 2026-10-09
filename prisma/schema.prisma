@@ -397,3 +397,29 @@ model DispatchUpload {
   @@index([kind, uploadedAt])
   @@map("dispatch_uploads")
 }
+
+// One row per open sales order line from the "outstanding sales orders" export
+// (Document No, Customer, Status, Delivery Date, Inventory, Warehouse, Outstanding Qty, Totals).
+// Each upload is a full snapshot: the newest completed upload replaces everything before it.
+model OutstandingOrderLine {
+  id                   String   @id @default(uuid())
+  uploadId             String   @db.VarChar(255)
+  company              String?  @db.VarChar(255)
+  documentNo           String   @db.VarChar(100)
+  customerCode         String?  @db.VarChar(100)
+  customerName         String?  @db.VarChar(500)
+  status               String?  @db.VarChar(100)
+  deliveryDate         String?  @db.VarChar(10) // YYYY-MM-DD
+  inventoryCode        String?  @db.VarChar(100)
+  inventoryDescription String?  @db.VarChar(500)
+  warehouse            String?  @db.VarChar(255)
+  outstandingQty       Float    @default(0)
+  unitPrice            Float?
+  totalExcl            Float?
+  dateCreated          String?  @db.VarChar(10) // YYYY-MM-DD
+  createdBy            String?  @db.VarChar(255)
+  createdAt            DateTime @default(now())
+
+  @@index([uploadId])
+  @@map("outstanding_order_lines")
+}

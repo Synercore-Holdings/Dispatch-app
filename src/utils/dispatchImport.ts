@@ -3,6 +3,8 @@
 //   2. Invoice register  (Invoice No, Source Sales Order, Invoice Delivery, Dispatch Date, Delivery / Due Date, Customer)
 //                         with "Branch: <name> (Count=n)" group rows between invoices
 //   3. IBT transactions  (id, Reference, TransactionDate, DocumentType, InventoryCode, InventoryName, WarehouseCode, QtyIn, QtyOut)
+// plus the outstanding sales orders snapshot that feeds the Outstanding Sales Orders view:
+//   4. Outstanding orders (Document No, Customer, Status, Delivery Date, Inventory, Warehouse, Outstanding Qty, Totals)
 //
 // Every parser finds its header row by name (exports sometimes carry title rows),
 // normalises dates to YYYY-MM-DD and returns rows ready for /api/dispatch-performance.
@@ -334,6 +336,82 @@ export const parseIbtTransactions = (rows: unknown[][]): ParseResult<IbtLineUplo
   if (order === "mdy") warnings.push("Dates were read as month/day/year because some days were above 12.");
   if (otherTypes) warnings.push(`${otherTypes} row(s) were not Inter Branch Transfers and were ignored.`);
   return { rows: result, skipped, warnings, ...dateRange(result.map((row) => row.transactionDate)) };
+};
+
+// ---------------------------------------------------------------------------
+// 4. Outstanding sales orders
+// ---------------------------------------------------------------------------
+
+export interface OutstandingOrderUpload {
+  company: string;
+  documentNo: string;
+  customerCode: string;
+  customerName: string;
+  status: string;
+  deliveryDate: string;
+  inventoryCode: string;
+  inventoryDescription: string;
+  warehouse: string;
+  outstandingQty: number;
+  unitPrice: number | null;
+  totalExcl: number | null;
+  dateCreated: string;
+  createdBy: string;
+}
+
+const OUTSTANDING_COLUMNS = {
+  company: ["Company"],
+  documentNo: ["Document No", "Document Number", "Sales Order", "Sales Order No"],
+  customerCode: ["Customer Code", "Customer Account", "Account Code"],
+  customerName: ["Customer Name", "Customer"],
+  status: ["Status", "Order Status"],
+  deliveryDate: ["Delivery Date", "Due Date", "Delivery / Due Date"],
+  inventoryCode: ["Inventory Code", "Item Code", "Product Code"],
+  inventoryDescription: ["Inventory Description", "Inventory Name", "Item Description", "Description"],
+  warehouse: ["Warehouse", "Warehouse Name"],
+  outstandingQty: ["Outstanding Qty", "Outstanding Quantity", "Qty Outstanding", "Balance Qty"],
+  unitPrice: ["Unit Price", "Unit Price Excl", "Unit Price Exclusive"],
+  totalExcl: ["Total Excl Tax Outstanding", "Total Excl Tax", "Total Exclusive", "Total Excl"],
+  dateCreated: ["DateCreated", "Date Created", "Created Date"],
+  createdBy: ["CreatedByUserid", "Created By User", "Created By", "CreatedBy"],
+};
+
+export const parseOutstandingOrders = (rows: unknown[][]): ParseResult<OutstandingOrderUpload> => {
+  const { headerRow, columns } = findColumns(rows, OUTSTANDING_COLUMNS, ["documentNo", "deliveryDate", "outstandingQty"]);
+  const get = getter(columns);
+  const body = rows.slice(headerRow + 1);
+  const order = detectDateOrder(body.flatMap((row) => [get(row, "deliveryDate"), get(row, "dateCreated")]));
+  const result: OutstandingOrderUpload[] = [];
+  let skipped = 0;
+  let missingDeliveryDate = 0;
+
+  for (const row of body) {
+    const documentNo = cellText(get(row, "documentNo")).toUpperCase();
+    if (!documentNo || /^total/i.test(documentNo)) { skipped += 1; continue; }
+    const deliveryDate = parseDate(get(row, "deliveryDate"), order);
+    if (!deliveryDate) missingDeliveryDate += 1;
+    result.push({
+      company: cellText(get(row, "company")),
+      documentNo,
+      customerCode: cellText(get(row, "customerCode")).toUpperCase(),
+      customerName: cellText(get(row, "customerName")),
+      status: cellText(get(row, "status")),
+      deliveryDate,
+      inventoryCode: cellText(get(row, "inventoryCode")),
+      inventoryDescription: cellText(get(row, "inventoryDescription")),
+      warehouse: cellText(get(row, "warehouse")),
+      outstandingQty: parseAmount(get(row, "outstandingQty")) ?? 0,
+      unitPrice: parseAmount(get(row, "unitPrice")),
+      totalExcl: parseAmount(get(row, "totalExcl")),
+      dateCreated: parseDate(get(row, "dateCreated"), order),
+      createdBy: cellText(get(row, "createdBy")),
+    });
+  }
+
+  const warnings: string[] = [];
+  if (order === "mdy") warnings.push("Dates were read as month/day/year because some days were above 12.");
+  if (missingDeliveryDate) warnings.push(`${missingDeliveryDate} line(s) have no Delivery Date, so they can't be flagged as overdue.`);
+  return { rows: result, skipped, warnings, ...dateRange(result.map((row) => row.deliveryDate)) };
 };
 
 // ---------------------------------------------------------------------------

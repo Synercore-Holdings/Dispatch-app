@@ -77,7 +77,7 @@ const downloadTemplate = async (def: UploadDefinition) => {
   await XLSX.writeFile(workbook, `${def.kind}-template.xlsx`);
 };
 
-const readSheetRows = async (file: File): Promise<unknown[][]> => {
+export const readSheetRows = async (file: File): Promise<unknown[][]> => {
   const isCsv = /\.(csv|txt|tsv)$/i.test(file.name);
   const workbook = isCsv
     ? await XLSX.read(await file.text(), { type: "string" })

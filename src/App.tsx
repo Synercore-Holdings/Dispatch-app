@@ -12,6 +12,7 @@ import { Loader2 } from "lucide-react";
 // invoice register, IBT transactions). The previous order-management screens
 // are no longer routed; their code remains in git history / src for reference.
 const DispatchPerformance = lazy(() => import("./components/views/DispatchPerformance").then(m => ({ default: m.DispatchPerformance })));
+const OutstandingOrders = lazy(() => import("./components/views/OutstandingOrders").then(m => ({ default: m.OutstandingOrders })));
 const SettingsView = lazy(() => import("./components/views/SettingsView").then(m => ({ default: m.SettingsView })));
 
 const PageLoader = () => (
@@ -63,7 +64,7 @@ function AppContent() {
           <div className="mx-auto max-w-[1600px] p-8">
             <ErrorBoundary>
               <Suspense fallback={<PageLoader />}>
-                {activeNavItem === "settings" ? <SettingsView /> : <DispatchPerformance />}
+                {activeNavItem === "settings" ? <SettingsView /> : activeNavItem === "outstanding-orders" ? <OutstandingOrders /> : <DispatchPerformance />}
               </Suspense>
             </ErrorBoundary>
           </div>

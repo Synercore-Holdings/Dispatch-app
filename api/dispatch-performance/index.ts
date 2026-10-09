@@ -7,6 +7,9 @@ import { prisma, authenticate, authenticateAdmin, setCors, validateOrigin } from
 const MAX_ROWS_PER_REQUEST = 5000;
 const UPLOAD_KINDS = ["invoice-lines", "invoice-register", "ibt"] as const;
 type UploadKind = (typeof UPLOAD_KINDS)[number];
+// Outstanding sales orders are a point-in-time snapshot, not history: each upload
+// replaces the previous one wholesale once all its chunks have arrived.
+const OUTSTANDING_KIND = "outstanding-orders";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -75,6 +78,63 @@ const toIbtLines = (rows: Record<string, unknown>[], uploadId: string | null) =>
     uploadId,
   };
 });
+
+const toOutstandingLines = (rows: Record<string, unknown>[], uploadId: string) => rows.map((row) => {
+  const documentNo = key(row.documentNo);
+  if (!documentNo) throw new Error("Each outstanding order line needs a document number");
+  return {
+    uploadId,
+    company: str(row.company, 255),
+    documentNo,
+    customerCode: str(row.customerCode, 100),
+    customerName: str(row.customerName, 500),
+    status: str(row.status, 100),
+    deliveryDate: date(row.deliveryDate),
+    inventoryCode: str(row.inventoryCode, 100),
+    inventoryDescription: str(row.inventoryDescription, 500),
+    warehouse: str(row.warehouse, 255),
+    outstandingQty: num(row.outstandingQty) ?? 0,
+    unitPrice: num(row.unitPrice),
+    totalExcl: num(row.totalExcl),
+    dateCreated: date(row.dateCreated),
+    createdBy: str(row.createdBy, 255),
+  };
+});
+
+/**
+ * The live snapshot is the oldest upload that still has lines: finishing an upload
+ * deletes every other upload's lines, so while a newer upload is still arriving
+ * (or one failed half way) the previous complete snapshot keeps showing.
+ */
+async function getOutstandingOrders() {
+  const [upload] = await prisma.$queryRaw<{ id: string; filename: string; rows: number; uploadedBy: string | null; uploadedAt: Date }[]>`
+    SELECT u."id", u."filename", u."rows", u."uploadedBy", u."uploadedAt"
+    FROM "dispatch_uploads" u
+    WHERE u."kind" = ${OUTSTANDING_KIND}
+      AND EXISTS (SELECT 1 FROM "outstanding_order_lines" l WHERE l."uploadId" = u."id")
+    ORDER BY u."uploadedAt" ASC
+    LIMIT 1
+  `;
+  if (!upload) return { upload: null, lines: [] };
+  const lines = await prisma.outstandingOrderLine.findMany({
+    where: { uploadId: upload.id },
+    orderBy: [{ deliveryDate: "asc" }, { documentNo: "asc" }],
+    select: {
+      company: true, documentNo: true, customerCode: true, customerName: true, status: true, deliveryDate: true,
+      inventoryCode: true, inventoryDescription: true, warehouse: true, outstandingQty: true, unitPrice: true,
+      totalExcl: true, dateCreated: true, createdBy: true,
+    },
+  });
+  return {
+    upload: {
+      filename: upload.filename,
+      rows: upload.rows,
+      uploadedBy: upload.uploadedBy || "",
+      uploadedAt: upload.uploadedAt.toISOString(),
+    },
+    lines,
+  };
+}
 
 type InvoiceSummaryRow = {
   invoiceNo: string;
@@ -202,6 +262,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const lines = await prisma.dispatchInvoiceLine.findMany({ where: { invoiceNo }, orderBy: { lineNo: "asc" } });
         return res.status(200).json({ success: true, data: lines });
       }
+      if (action === OUTSTANDING_KIND) {
+        return res.status(200).json({ success: true, data: await getOutstandingOrders() });
+      }
       if (action === "ibt-lines") {
         const reference = key(req.query.reference);
         const lines = await prisma.dispatchIbtLine.findMany({ where: { reference }, orderBy: [{ sourceId: "asc" }, { qtyOut: "desc" }] });
@@ -217,8 +280,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const body = (req.body || {}) as { kind?: string; filename?: string; rows?: unknown; uploadId?: string };
 
       if (action === "start-upload") {
-        const kind = body.kind as UploadKind;
-        if (!UPLOAD_KINDS.includes(kind)) return res.status(400).json({ success: false, error: "Unknown upload kind" });
+        const kind = body.kind as UploadKind | typeof OUTSTANDING_KIND;
+        if (!UPLOAD_KINDS.includes(kind as UploadKind) && kind !== OUTSTANDING_KIND) return res.status(400).json({ success: false, error: "Unknown upload kind" });
         const upload = await prisma.dispatchUpload.create({
           data: {
             kind,
@@ -228,6 +291,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           },
         });
         return res.status(201).json({ success: true, data: { id: upload.id } });
+      }
+
+      if (action === "finish-upload") {
+        const uploadId = str(body.uploadId, 255);
+        const upload = uploadId ? await prisma.dispatchUpload.findUnique({ where: { id: uploadId } }) : null;
+        if (!upload || upload.kind !== OUTSTANDING_KIND) return res.status(400).json({ success: false, error: "Unknown upload" });
+        const deleted = await prisma.outstandingOrderLine.deleteMany({ where: { uploadId: { not: upload.id } } });
+        return res.status(200).json({ success: true, data: { replaced: deleted.count } });
       }
 
       const rows = Array.isArray(body.rows) ? body.rows as Record<string, unknown>[] : null;
@@ -258,6 +329,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(200).json({ success: true, data: { invoices: data.length, rows: data.length } });
       }
 
+      if (action === OUTSTANDING_KIND) {
+        const upload = uploadId ? await prisma.dispatchUpload.findUnique({ where: { id: uploadId } }) : null;
+        if (!upload || upload.kind !== OUTSTANDING_KIND) return res.status(400).json({ success: false, error: "Unknown upload" });
+        const result = await prisma.outstandingOrderLine.createMany({ data: toOutstandingLines(rows, upload.id) });
+        return res.status(200).json({ success: true, data: { rows: result.count } });
+      }
+
       if (action === "ibt") {
         const data = toIbtLines(rows, uploadId);
         const references = Array.from(new Set(data.map((row) => row.reference)));
@@ -273,6 +351,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (req.method === "DELETE" && action === "clear") {
       if (!(await authenticateAdmin(req.headers.authorization))) return res.status(403).json({ success: false, error: "Admins only" });
+      if (req.query.kind === OUTSTANDING_KIND) {
+        const deleted = await prisma.outstandingOrderLine.deleteMany();
+        await prisma.dispatchUpload.deleteMany({ where: { kind: OUTSTANDING_KIND } });
+        return res.status(200).json({ success: true, data: { deleted: deleted.count } });
+      }
       const kind = req.query.kind as UploadKind;
       if (!UPLOAD_KINDS.includes(kind)) return res.status(400).json({ success: false, error: "Unknown upload kind" });
       const deleted = kind === "invoice-lines"
