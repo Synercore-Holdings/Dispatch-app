@@ -198,14 +198,14 @@ export const OutstandingOrders: React.FC = () => {
 
       <OutstandingUpload upload={snapshot?.upload ?? null} onUploaded={() => void load()} />
 
-      <div className="sticky top-0 z-10 -mx-1 flex flex-wrap items-center gap-2 rounded-card border border-gray-200 bg-white/95 px-3 py-2.5 shadow-card backdrop-blur">
-        <div className="relative">
+      <div className="z-10 -mx-1 md:sticky md:top-0 flex flex-wrap items-center gap-2 rounded-card border border-gray-200 bg-white/95 px-3 py-2.5 shadow-card backdrop-blur">
+        <div className="relative w-full sm:w-auto">
           <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
           <input
             value={search}
             onChange={(e) => { setSearch(e.target.value); setVisibleCount(PAGE_SIZE); }}
             placeholder="ASO, customer, product…"
-            className="w-56 rounded-lg border border-gray-200 bg-white py-1.5 pl-8 pr-3 text-xs text-gray-900 focus:border-emerald-400 focus:outline-none"
+            className="w-full sm:w-56 rounded-lg border border-gray-200 bg-white py-1.5 pl-8 pr-3 text-xs text-gray-900 focus:border-emerald-400 focus:outline-none"
           />
         </div>
         <select value={warehouse} onChange={(e) => setWarehouse(e.target.value)} className={`${selectClass} max-w-[220px]`} aria-label="Warehouse">

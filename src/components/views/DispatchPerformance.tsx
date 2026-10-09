@@ -119,7 +119,7 @@ export const DispatchPerformance: React.FC = () => {
 
       <DispatchUploads uploads={summary?.uploads ?? {}} onUploaded={handleUploaded} />
 
-      <div className="sticky top-0 z-10 -mx-1 flex flex-wrap items-center gap-2 rounded-card border border-gray-200 bg-white/95 px-3 py-2.5 shadow-card backdrop-blur">
+      <div className="z-10 -mx-1 md:sticky md:top-0 flex flex-wrap items-center gap-2 rounded-card border border-gray-200 bg-white/95 px-3 py-2.5 shadow-card backdrop-blur">
         <SegmentedControl<Tab> value={tab} onChange={setTab} options={[{ id: "orders", label: "Customer orders" }, { id: "ibt", label: "IBT transfers" }]} />
         <span className="mx-1 h-5 w-px bg-gray-200" />
         <select value={preset} onChange={(e) => setPreset(e.target.value as RangePreset)} className={selectClass} aria-label="Date range">

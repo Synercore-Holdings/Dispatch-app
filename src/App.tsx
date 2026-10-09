@@ -6,7 +6,13 @@ import { Login } from "./components/views/Login";
 import { PrivacyNotice } from "./components/views/PrivacyNotice";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { ErrorBoundary } from "./components/ErrorBoundary";
-import { Loader2 } from "lucide-react";
+import { Loader2, Menu } from "lucide-react";
+
+const NAV_TITLES: Record<string, string> = {
+  "dispatch-performance": "Dispatch Performance",
+  "outstanding-orders": "Outstanding Sales Orders",
+  settings: "Settings",
+};
 
 // The app is now a reporting view over uploaded ERP exports (invoice lines,
 // invoice register, IBT transactions). The previous order-management screens
@@ -30,6 +36,7 @@ function AppContent() {
   const { isAuthenticated, isLoading } = useAuth();
   const [activeNavItem, setActiveNavItem] = useState("dispatch-performance");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [authView, setAuthView] = useState<AuthView>("login");
 
   if (isLoading) {
@@ -55,13 +62,29 @@ function AppContent() {
       <div className="min-h-screen bg-gray-50">
         <Sidebar
           activeItem={activeNavItem}
-          onItemChange={setActiveNavItem}
+          onItemChange={(item) => { setActiveNavItem(item); setMobileNavOpen(false); }}
           collapsed={sidebarCollapsed}
           onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+          mobileOpen={mobileNavOpen}
+          onCloseMobile={() => setMobileNavOpen(false)}
         />
+        {mobileNavOpen && (
+          <div className="fixed inset-0 z-30 bg-black/40 md:hidden" onClick={() => setMobileNavOpen(false)} aria-hidden="true" />
+        )}
 
-        <div className={`${sidebarCollapsed ? "ml-16" : "ml-60"} min-h-screen transition-all duration-300`}>
-          <div className="mx-auto max-w-[1600px] p-8">
+        <div className={`${sidebarCollapsed ? "md:ml-16" : "md:ml-60"} min-h-screen transition-all duration-300`}>
+          <header className="sticky top-0 z-20 flex h-14 items-center gap-3 px-4 md:hidden" style={{ background: "#064e3b" }}>
+            <button
+              type="button"
+              onClick={() => setMobileNavOpen(true)}
+              className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/[0.08] text-white"
+              aria-label="Open menu"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+            <span className="truncate text-sm font-semibold text-white">{NAV_TITLES[activeNavItem] ?? "Dispatch"}</span>
+          </header>
+          <div className="mx-auto max-w-[1600px] p-4 sm:p-6 lg:p-8">
             <ErrorBoundary>
               <Suspense fallback={<PageLoader />}>
                 {activeNavItem === "settings" ? <SettingsView /> : activeNavItem === "outstanding-orders" ? <OutstandingOrders /> : <DispatchPerformance />}

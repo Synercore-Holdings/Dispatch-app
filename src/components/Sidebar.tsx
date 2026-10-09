@@ -9,6 +9,7 @@ import {
   ChevronRight,
   Sun,
   Moon,
+  X,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../hooks/useTheme";
@@ -18,6 +19,9 @@ interface SidebarProps {
   onItemChange: (item: string) => void;
   collapsed: boolean;
   onToggleCollapse: () => void;
+  /** Below the md breakpoint the sidebar is an off-canvas drawer, shown only while this is true. */
+  mobileOpen: boolean;
+  onCloseMobile: () => void;
 }
 
 interface NavItem {
@@ -35,7 +39,9 @@ const BOTTOM_ITEMS: NavItem[] = [
   { id: "settings", icon: SettingsIcon, label: "Settings" },
 ];
 
-export const Sidebar: React.FC<SidebarProps> = ({ activeItem, onItemChange, collapsed, onToggleCollapse }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ activeItem, onItemChange, collapsed: collapsedSetting, onToggleCollapse, mobileOpen, onCloseMobile }) => {
+  // The mobile drawer always shows labels, whatever the desktop collapse setting is.
+  const collapsed = collapsedSetting && !mobileOpen;
   const { user, logout } = useAuth();
   const { theme, toggle: toggleTheme } = useTheme();
 
@@ -75,9 +81,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeItem, onItemChange, coll
 
   return (
     <div
-      className={`fixed left-0 top-0 h-screen flex flex-col overflow-y-auto z-30 transition-all duration-300 sidebar-scroll ${
-        collapsed ? "w-16" : "w-60"
-      }`}
+      className={`fixed left-0 top-0 h-[100dvh] flex flex-col overflow-y-auto z-40 transition-all duration-300 sidebar-scroll md:translate-x-0 ${
+        mobileOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"
+      } ${collapsed ? "w-16" : "w-60"}`}
       style={{ background: "#064e3b" }}
     >
       {/* Header */}
@@ -95,9 +101,16 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeItem, onItemChange, coll
         )}
         <button
           onClick={onToggleCollapse}
-          className="w-8 h-8 rounded-xl bg-white/[0.06] flex items-center justify-center text-white/60 hover:text-white hover:bg-white/[0.1] transition-colors"
+          className="hidden md:flex w-8 h-8 rounded-xl bg-white/[0.06] items-center justify-center text-white/60 hover:text-white hover:bg-white/[0.1] transition-colors"
         >
           {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+        </button>
+        <button
+          onClick={onCloseMobile}
+          className="md:hidden w-8 h-8 rounded-xl bg-white/[0.06] flex items-center justify-center text-white/60 hover:text-white hover:bg-white/[0.1] transition-colors"
+          aria-label="Close menu"
+        >
+          <X className="w-4 h-4" />
         </button>
       </div>
 

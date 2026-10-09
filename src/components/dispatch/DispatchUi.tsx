@@ -7,7 +7,7 @@ export const Panel: React.FC<{
   className?: string;
   children: React.ReactNode;
 }> = ({ title, subtitle, actions, className = "", children }) => (
-  <section className={`rounded-card border border-gray-200 bg-white p-5 shadow-card ${className}`}>
+  <section className={`rounded-card border border-gray-200 bg-white p-4 shadow-card sm:p-5 ${className}`}>
     <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
       <div>
         <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
@@ -30,7 +30,7 @@ export const StatTile: React.FC<{
       {tone && <span className={`h-2 w-2 rounded-full ${tone === "good" ? "bg-[#0ca30c]" : "bg-[#d03b3b]"}`} />}
       {label}
     </p>
-    <p className="mt-1.5 text-2xl font-bold text-gray-900">{value}</p>
+    <p className="mt-1.5 break-words text-xl font-bold text-gray-900 sm:text-2xl">{value}</p>
     {hint && <p className="mt-1 text-[11px] leading-snug text-gray-500">{hint}</p>}
   </div>
 );
