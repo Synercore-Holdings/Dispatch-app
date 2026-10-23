@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { PrismaClient } from "@prisma/client";
-import { authenticate, validateOrigin } from "../_lib.js";
+import { authenticate, isExcludedCustomer, validateOrigin } from "../_lib.js";
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 const prisma = globalForPrisma.prisma || new PrismaClient();
@@ -105,7 +105,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === "GET") {
     try {
       const jobs = await prisma.job.findMany({ orderBy: { createdAt: "desc" } });
-      return res.json({ success: true, data: jobs.map(formatJob) });
+      return res.json({ success: true, data: jobs.filter((job) => !isExcludedCustomer(job.customer)).map(formatJob) });
     } catch (error) {
       console.error("Error fetching jobs:", error);
       return res.status(500).json({ success: false, error: "Failed to fetch jobs" });
@@ -248,7 +248,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           return tx.job.findMany({ where: { jobType }, orderBy: { createdAt: "desc" } });
         });
 
-        return res.status(201).json({ success: true, data: result.map(formatJob) });
+        return res.status(201).json({ success: true, data: result.filter((job) => !isExcludedCustomer(job.customer)).map(formatJob) });
       } catch (error) {
         console.error("Error bulk replacing jobs:", error);
         return res.status(500).json({ success: false, error: "Failed to bulk replace jobs" });
@@ -289,7 +289,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         const result = await prisma.job.createMany({ data: jobsData });
         const createdJobs = await prisma.job.findMany({ orderBy: { createdAt: "desc" }, take: result.count });
-        return res.status(201).json({ success: true, data: createdJobs.map(formatJob) });
+        return res.status(201).json({ success: true, data: createdJobs.filter((job) => !isExcludedCustomer(job.customer)).map(formatJob) });
       } catch (error) {
         console.error("Error bulk creating jobs:", error);
         return res.status(500).json({ success: false, error: "Failed to bulk create jobs" });

@@ -1,5 +1,6 @@
 // src/services/api.ts
 import type { Job, Driver } from "../types";
+import { isExcludedCustomer } from "../utils/constants";
 
 // For serverless: API is on the same domain, use relative paths
 // For local dev with vercel dev: also relative
@@ -213,7 +214,8 @@ export interface AfricaExportTransporter {
 
 export const africaExportsAPI = {
   getAll: async (): Promise<AfricaExportShipment[]> => {
-    return fetchAPI<AfricaExportShipment[]>("/api/africa-exports");
+    const shipments = await fetchAPI<AfricaExportShipment[]>("/api/africa-exports");
+    return shipments.filter((shipment) => !isExcludedCustomer(shipment.customer));
   },
 
   create: async (shipment: AfricaExportShipment): Promise<AfricaExportShipment> => {
@@ -237,10 +239,10 @@ export const africaExportsAPI = {
   },
 
   bulkUpsert: async (shipments: AfricaExportShipment[]): Promise<AfricaExportShipment[]> => {
-    return fetchAPI<AfricaExportShipment[]>("/api/africa-exports?action=bulk-upsert", {
+    return (await fetchAPI<AfricaExportShipment[]>("/api/africa-exports?action=bulk-upsert", {
       method: "POST",
       body: JSON.stringify({ shipments }),
-    });
+    })).filter((shipment) => !isExcludedCustomer(shipment.customer));
   },
 };
 

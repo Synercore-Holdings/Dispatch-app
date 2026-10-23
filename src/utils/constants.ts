@@ -44,3 +44,13 @@ export function getWeekRange(): { start: Date; end: Date } {
   end.setHours(23, 59, 59, 999);
   return { start, end };
 }
+
+// Excluded customers: hidden everywhere but kept in the database.
+// Mirrors api/_lib.ts, which filters the server-served data.
+const EXCLUDED_CUSTOMERS = ["Allmark Foods (Pty) Ltd"];
+const customerKey = (name: unknown) => String(name ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+const EXCLUDED_CUSTOMER_KEYS = new Set(EXCLUDED_CUSTOMERS.map(customerKey));
+
+export function isExcludedCustomer(...names: unknown[]): boolean {
+  return names.some((name) => EXCLUDED_CUSTOMER_KEYS.has(customerKey(name)));
+}

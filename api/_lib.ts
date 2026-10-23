@@ -194,3 +194,17 @@ export function validateOrigin(req: { method?: string; headers: { origin?: strin
 // Constants
 // ---------------------------------------------------------------------------
 export const MAX_BATCH_SIZE = 500;
+
+// ---------------------------------------------------------------------------
+// Excluded customers: rows stay in the database but are never served.
+// Mirrored in src/utils/constants.ts for data the client filters itself.
+// ---------------------------------------------------------------------------
+const EXCLUDED_CUSTOMERS = ["Allmark Foods (Pty) Ltd"];
+
+// Compare on letters and digits only so "ALLMARK FOODS PTY LTD." still matches.
+const customerKey = (name: unknown) => String(name ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+const EXCLUDED_CUSTOMER_KEYS = new Set(EXCLUDED_CUSTOMERS.map(customerKey));
+
+export function isExcludedCustomer(...names: unknown[]): boolean {
+  return names.some((name) => EXCLUDED_CUSTOMER_KEYS.has(customerKey(name)));
+}

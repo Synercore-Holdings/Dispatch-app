@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { prisma, authenticate, authenticateAdmin, setCors, validateOrigin } from "../_lib.js";
+import { prisma, authenticate, authenticateAdmin, isExcludedCustomer, setCors, validateOrigin } from "../_lib.js";
 
 // Uploads are chunked by the client; every invoice / IBT reference arrives whole
 // in exactly one chunk, so "delete by key then insert" replaces it cleanly and a
@@ -132,7 +132,7 @@ async function getOutstandingOrders() {
       uploadedBy: upload.uploadedBy || "",
       uploadedAt: upload.uploadedAt.toISOString(),
     },
-    lines,
+    lines: lines.filter((line) => !isExcludedCustomer(line.customerName)),
   };
 }
 
@@ -206,7 +206,7 @@ async function getSummary(from: string, to: string) {
   ]);
 
   return {
-    invoices: invoices.map((row) => ({
+    invoices: invoices.filter((row) => !isExcludedCustomer(row.lineCustomer, row.registerCustomer)).map((row) => ({
       invoiceNo: row.invoiceNo,
       salesOrder: row.salesOrder || "",
       deliveryNote: row.deliveryNote || "",

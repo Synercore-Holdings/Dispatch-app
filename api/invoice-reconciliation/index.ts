@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { prisma, authenticate, setCors, validateOrigin, MAX_BATCH_SIZE } from "../_lib.js";
+import { prisma, authenticate, isExcludedCustomer, setCors, validateOrigin, MAX_BATCH_SIZE } from "../_lib.js";
 
 const MAX_TEXT = 5000;
 const MAX_STRING = 1000;
@@ -144,7 +144,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.json({
         success: true,
         data: {
-          lines: lines.map(formatLine),
+          lines: lines.filter((line) => !isExcludedCustomer(line.customer)).map(formatLine),
           reviews: formatReviewMap(reviews),
           timingNotes: formatNoteMap(notes),
           timingComments: formatCommentMap(notes),
