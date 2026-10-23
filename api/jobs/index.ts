@@ -1,7 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { PrismaClient } from "@prisma/client";
-import jwt from "jsonwebtoken";
-import { validateOrigin } from "../_lib.js";
+import { authenticate, isExcludedCustomer, validateOrigin } from "../_lib.js";
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 const prisma = globalForPrisma.prisma || new PrismaClient();
@@ -15,11 +14,10 @@ function setCors(res: VercelResponse, req: VercelRequest) {
 
 interface JwtPayload { id: string; username: string; email: string; role: string }
 
-function requireAuth(authHeader: string | undefined, res: VercelResponse): JwtPayload | null {
+async function requireAuth(authHeader: string | undefined, res: VercelResponse): Promise<JwtPayload | null> {
   const secret = process.env.JWT_SECRET;
   if (!secret) { res.status(500).json({ success: false, error: "Server configuration error" }); return null; }
-  if (!authHeader || !authHeader.startsWith("Bearer ")) return null;
-  try { return jwt.verify(authHeader.slice(7), secret) as JwtPayload; } catch { return null; }
+  return authenticate(authHeader);
 }
 
 const formatJob = (job: Record<string, unknown>) => ({
@@ -33,7 +31,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === "OPTIONS") return res.status(200).end();
   if (!validateOrigin(req)) return res.status(403).json({ success: false, error: "Forbidden" });
 
-  const user = requireAuth(req.headers.authorization, res);
+  const user = await requireAuth(req.headers.authorization, res);
   if (!user) return res.headersSent ? undefined : res.status(401).json({ success: false, error: "Unauthorized" });
 
   const id = req.query.id as string | undefined;
@@ -107,7 +105,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === "GET") {
     try {
       const jobs = await prisma.job.findMany({ orderBy: { createdAt: "desc" } });
-      return res.json({ success: true, data: jobs.map(formatJob) });
+      return res.json({ success: true, data: jobs.filter((job) => !isExcludedCustomer(job.customer)).map(formatJob) });
     } catch (error) {
       console.error("Error fetching jobs:", error);
       return res.status(500).json({ success: false, error: "Failed to fetch jobs" });
@@ -250,7 +248,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           return tx.job.findMany({ where: { jobType }, orderBy: { createdAt: "desc" } });
         });
 
-        return res.status(201).json({ success: true, data: result.map(formatJob) });
+        return res.status(201).json({ success: true, data: result.filter((job) => !isExcludedCustomer(job.customer)).map(formatJob) });
       } catch (error) {
         console.error("Error bulk replacing jobs:", error);
         return res.status(500).json({ success: false, error: "Failed to bulk replace jobs" });
@@ -291,7 +289,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         const result = await prisma.job.createMany({ data: jobsData });
         const createdJobs = await prisma.job.findMany({ orderBy: { createdAt: "desc" }, take: result.count });
-        return res.status(201).json({ success: true, data: createdJobs.map(formatJob) });
+        return res.status(201).json({ success: true, data: createdJobs.filter((job) => !isExcludedCustomer(job.customer)).map(formatJob) });
       } catch (error) {
         console.error("Error bulk creating jobs:", error);
         return res.status(500).json({ success: false, error: "Failed to bulk create jobs" });

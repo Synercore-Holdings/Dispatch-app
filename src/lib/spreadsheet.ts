@@ -13,6 +13,8 @@ export type Row = Record<string, unknown>;
 interface SheetData {
   headers: string[];
   rows: Row[];
+  /** Every non-empty row as a plain array, header row included (only set when reading). */
+  rawRows?: unknown[][];
 }
 
 interface Workbook {
@@ -57,15 +59,17 @@ function readCSV(text: string): Workbook {
   const delim = lines[0].includes("\t") ? "\t" : ",";
   const headers = parseCSVLine(lines[0], delim);
   const rows: Row[] = [];
+  const rawRows: unknown[][] = [headers];
   for (let i = 1; i < lines.length; i++) {
     const values = parseCSVLine(lines[i], delim);
+    rawRows.push(values);
     const row: Row = {};
     headers.forEach((h, idx) => {
       row[h] = values[idx] ?? "";
     });
     rows.push(row);
   }
-  return { SheetNames: ["Sheet1"], Sheets: { Sheet1: { headers, rows } } };
+  return { SheetNames: ["Sheet1"], Sheets: { Sheet1: { headers, rows, rawRows } } };
 }
 
 function parseCSVLine(line: string, delim: string): string[] {
@@ -107,9 +111,11 @@ async function readXLSX(buffer: ArrayBuffer): Promise<Workbook> {
     result.SheetNames.push(sheet.name);
     const headers: string[] = [];
     const rows: Row[] = [];
+    const rawRows: unknown[][] = [];
 
     sheet.eachRow((row, rowNumber) => {
       const values = (row.values as unknown[]).slice(1); // exceljs is 1-indexed
+      rawRows.push(Array.from(values, unwrapCellValue));
       if (rowNumber === 1) {
         values.forEach((v) => headers.push(String(v ?? "")));
       } else {
@@ -126,10 +132,21 @@ async function readXLSX(buffer: ArrayBuffer): Promise<Workbook> {
       }
     });
 
-    result.Sheets[sheet.name] = { headers, rows };
+    result.Sheets[sheet.name] = { headers, rows, rawRows };
   });
 
   return result;
+}
+
+/** Flatten ExcelJS cell objects (formulas, rich text, hyperlinks) to their plain value. */
+function unwrapCellValue(val: unknown): unknown {
+  if (val === null || val === undefined) return "";
+  if (typeof val !== "object" || val instanceof Date) return val;
+  const obj = val as Record<string, unknown>;
+  if ("result" in obj) return unwrapCellValue(obj.result);
+  if (Array.isArray(obj.richText)) return (obj.richText as { text?: string }[]).map((part) => part.text ?? "").join("");
+  if ("text" in obj) return unwrapCellValue(obj.text);
+  return "";
 }
 
 // ---------------------------------------------------------------------------

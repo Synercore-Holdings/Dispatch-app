@@ -33,3 +33,6 @@ backend/.env
 
 .vercel
 .env*.local
+
+# Claude Code local settings (can contain credentials)
+.claude/settings.local.json

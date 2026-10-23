@@ -141,7 +141,7 @@ const Toast: React.FC<{ notification: Notification; onClose: (id: string) => voi
 
   return (
     <div
-      className={`${style.bg} rounded-lg shadow-lg border border-gray-200 overflow-hidden flex items-stretch min-w-[320px] max-w-[420px] transition-all duration-200 ${
+      className={`${style.bg} rounded-lg shadow-lg border border-gray-200 overflow-hidden flex items-stretch w-[calc(100vw-2rem)] sm:w-auto sm:min-w-[320px] max-w-[420px] transition-all duration-200 ${
         exiting ? "opacity-0 translate-x-8" : "opacity-100 translate-x-0"
       }`}
       style={{ animation: exiting ? undefined : "slideInRight 0.3s ease-out" }}
@@ -214,7 +214,7 @@ const ConfirmModal: React.FC<{ state: ConfirmState; onClose: () => void }> = ({ 
           </div>
           <div>
             <h3 className="text-lg font-semibold text-gray-900">{state.title}</h3>
-            <p className="text-sm text-gray-600 mt-1">{state.message}</p>
+            <p className="text-sm text-gray-600 mt-1 whitespace-pre-line">{state.message}</p>
           </div>
         </div>
         <div className="flex justify-end gap-3 pt-2">
